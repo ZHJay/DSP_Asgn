@@ -1,0 +1,89 @@
+{
+  "history": [
+    {
+      "epoch": 1,
+      "train": {
+        "loss": 2.722531068860815,
+        "speaker_accuracy": 0.6825842696629213,
+        "digit_accuracy": 0.36235955056179775
+      },
+      "eval": {
+        "loss": 1.0826722979545593,
+        "speaker_accuracy": 0.85,
+        "digit_accuracy": 0.825
+      }
+    },
+    {
+      "epoch": 2,
+      "train": {
+        "loss": 0.8665332238325912,
+        "speaker_accuracy": 0.8679775280898876,
+        "digit_accuracy": 0.800561797752809
+      },
+      "eval": {
+        "loss": 1.0771540254354477,
+        "speaker_accuracy": 0.825,
+        "digit_accuracy": 0.85
+      }
+    },
+    {
+      "epoch": 3,
+      "train": {
+        "loss": 0.39284327799935687,
+        "speaker_accuracy": 0.9241573033707865,
+        "digit_accuracy": 0.9382022471910112
+      },
+      "eval": {
+        "loss": 0.29081542827188966,
+        "speaker_accuracy": 0.975,
+        "digit_accuracy": 0.95
+      }
+    },
+    {
+      "epoch": 4,
+      "train": {
+        "loss": 0.19700206550403257,
+        "speaker_accuracy": 0.9606741573033708,
+        "digit_accuracy": 0.9887640449438202
+      },
+      "eval": {
+        "loss": 0.25974016953259704,
+        "speaker_accuracy": 1.0,
+        "digit_accuracy": 0.95
+      }
+    },
+    {
+      "epoch": 5,
+      "train": {
+        "loss": 0.11599723987406894,
+        "speaker_accuracy": 0.9803370786516854,
+        "digit_accuracy": 0.9859550561797753
+      },
+      "eval": {
+        "loss": 0.24021460504736752,
+        "speaker_accuracy": 0.975,
+        "digit_accuracy": 0.95
+      }
+    }
+  ],
+  "label_maps": {
+    "speaker": {
+      "0": "bck",
+      "1": "cqc",
+      "2": "xsq",
+      "3": "zhj"
+    },
+    "digit": {
+      "0": "0",
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9"
+    }
+  }
+}

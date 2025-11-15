@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预处理功能</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="app">
+        <header class="hero">
+            <h1>音频预处理控制台</h1>
+            <p>上传 WAV 文件完成预处理，并触发时域或频域分析。</p>
+        </header>
+
+        <main class="main-grid">
+            <section class="card upload-card">
+                <h2>文件上传</h2>
+                <form class="upload-form" enctype="multipart/form-data" @submit.prevent="handleUpload">
+                    <label class="file-input">
+                        <span>{{ selectedFile ? selectedFile.name : '选择 WAV 文件' }}</span>
+                        <input type="file" ref="fileInput" accept=".wav" @change="onFileChange" required>
+                    </label>
+                    <button class="primary-button" type="submit" :disabled="isUploading">
+                        {{ isUploading ? '处理中…' : '上传并预处理' }}
+                    </button>
+                </form>
+            </section>
+
+            <section class="card action-card">
+                <h2>后续操作</h2>
+                <p class="hint" v-if="!lastProcessedFile">预处理完成后可进行分析。</p>
+                <div class="action-buttons">
+                    <button class="action-button" type="button" :disabled="!canProcessTime" @click="processTimeDomain">
+                        {{ isProcessing ? '处理中…' : '时域分析' }}
+                    </button>
+                    <button class="action-button" type="button" :disabled="!canProcessFrequency" @click="processFrequencyDomain">
+                        {{ isProcessing ? '处理中…' : '频域分析' }}
+                    </button>
+                </div>
+            </section>
+
+            <section class="card confidence-card">
+                <h2>置信度可视化</h2>
+
+                <div
+                    class="chart-board"
+                    v-for="section in chartSections"
+                    :key="section.key"
+                >
+                    <div class="chart-board-header">
+                        <h3>{{ section.title }}</h3>
+                        <span class="chart-status">{{ section.status }}</span>
+                    </div>
+
+                    <div class="chart-group" v-if="section.digitBars.length">
+                        <h4>数字概率分布</h4>
+                        <ul class="bar-list">
+                            <li class="bar-row" v-for="(item, index) in section.digitBars" :key="`digit-${section.key}-${index}`">
+                                <span class="bar-value">{{ item.displayPercent }}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill" :style="{ height: item.barHeight }"></div>
+                                </div>
+                                <span class="bar-label">{{ item.label }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <p v-else class="chart-placeholder">暂无数字数据</p>
+
+                    <div class="chart-group" v-if="section.supportsSpeaker && section.speakerBars.length">
+                        <h4>说话人概率分布</h4>
+                        <ul class="bar-list">
+                            <li class="bar-row" v-for="(item, index) in section.speakerBars" :key="`speaker-${section.key}-${index}`">
+                                <span class="bar-value">{{ item.displayPercent }}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill bar-fill-alt" :style="{ height: item.barHeight }"></div>
+                                </div>
+                                <span class="bar-label">{{ item.label }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <p v-else-if="section.supportsSpeaker" class="chart-placeholder">暂无说话人数据</p>
+                </div>
+            </section>
+
+            <section class="card feature-card" v-if="timeFeatureGroups.length">
+                <div class="feature-header">
+                    <div>
+                        <h2>时域特征摘要</h2>
+                        <p class="feature-meta" v-if="timeFeatureMeta">
+                            采样率：{{ timeFeatureMeta.sampleRate || '--' }} Hz ·
+                            时长：{{ formatDuration(timeFeatureMeta.durationSeconds) }} ·
+                            帧数：{{ timeFeatureMeta.frameCount || '--' }}
+                        </p>
+                    </div>
+                    <button class="feature-toggle" type="button" @click="toggleTimeFeatureSection">
+                        {{ timeFeatureExpanded ? '收起' : '展开' }}
+                    </button>
+                </div>
+
+                <div class="feature-groups" v-show="timeFeatureExpanded">
+                    <div class="feature-group" v-for="group in timeFeatureGroups" :key="group.key">
+                        <h3>{{ group.title }}</h3>
+                        <ul class="feature-metric-list">
+                            <li v-for="(metric, index) in group.metrics" :key="`${group.key}-${index}`">
+                                <span>{{ metric.label }}</span>
+                                <span class="metric-value">{{ formatFeatureMetric(metric.value, metric.unit) }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card output-card">
+                <div class="output-header">
+                    <h2>分析日志</h2>
+                    <button class="link-button" type="button" @click="messages = []" :disabled="messages.length === 0">清空</button>
+                </div>
+                <p v-if="messages.length === 0" class="placeholder">当前暂无消息，先上传音频开始流程。</p>
+                <ul v-else class="message-list">
+                    <li
+                        v-for="(message, index) in messages"
+                        :key="index"
+                        :class="[
+                            'message-item',
+                            {
+                                'message-success': message.includes('成功') || message.includes('完成'),
+                                'message-error': message.includes('失败') || message.includes('错误')
+                            }
+                        ]"
+                    >
+                        <span class="message-index">{{ index + 1 }}</span>
+                        <span class="message-text">{{ message }}</span>
+                    </li>
+                </ul>
+            </section>
+        </main>
+    </div>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
