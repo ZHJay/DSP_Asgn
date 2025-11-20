@@ -14,8 +14,8 @@ warnings.filterwarnings("ignore")
 
 BASE_DIR = Path(__file__).resolve().parent
 FREQ_DOMAIN_DIR = BASE_DIR.parent / "frequencydomain"
-DEFAULT_MODEL_PATH = FREQ_DOMAIN_DIR / "outputs" / "full" / "best_model.pt"
-DEFAULT_LABEL_MAP_PATH = FREQ_DOMAIN_DIR / "outputs" / "full" / "label_map.json"
+DEFAULT_MODEL_PATH = FREQ_DOMAIN_DIR / "outputs" / "best_model.pt"
+DEFAULT_LABEL_MAP_PATH = FREQ_DOMAIN_DIR / "outputs" / "metrics.json"
 DEFAULT_PROCESSOR_NAME = os.environ.get("WAV2VEC_MODEL_NAME", "facebook/wav2vec2-base")
 SAMPLE_RATE = int(os.environ.get("STT_SAMPLE_RATE", "16000"))
 MEL_BINS = int(os.environ.get("STT_MEL_BINS", "80"))
@@ -64,8 +64,22 @@ def _load_label_sets(label_map_path: Path) -> Tuple[List[str], List[str]]:
         warnings.warn(f"解析标签映射失败，使用默认标签: {exc}")
         return default_digits, default_speakers
 
-    digits = payload.get("digit") or default_digits
-    speakers = payload.get("speaker") or default_speakers
+    # 支持两种格式: 直接的 {digit: [...], speaker: [...]} 或嵌套的 {label_maps: {digit: {...}, speaker: {...}}}
+    label_maps = payload.get("label_maps", payload)
+    
+    digit_map = label_maps.get("digit", {})
+    speaker_map = label_maps.get("speaker", {})
+    
+    # 如果是字典格式（索引->标签），转换为列表
+    if isinstance(digit_map, dict):
+        digits = [digit_map.get(str(i), str(i)) for i in range(len(digit_map))]
+    else:
+        digits = digit_map or default_digits
+    
+    if isinstance(speaker_map, dict):
+        speakers = [speaker_map.get(str(i), f"speaker_{i}") for i in range(len(speaker_map))]
+    else:
+        speakers = speaker_map or default_speakers
 
     if not digits:
         digits = default_digits

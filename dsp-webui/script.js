@@ -3,6 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
+            activeTab: 'recognition',
             selectedFile: null,
             lastProcessedFile: null,
             messages: [],
@@ -11,6 +12,14 @@ createApp({
             timeFeatureGroups: [],
             timeFeatureMeta: null,
             timeFeatureExpanded: false,
+            cloneReferenceFile: null,
+            cloneText: '',
+            cloneLanguage: 'zh-cn',
+            isCloning: false,
+            cloneMessages: [],
+            cloneOutputPath: null,
+            cloneLogExpanded: false,
+            recognitionLogExpanded: false,
             chartState: {
                 time: {
                     key: 'time',
@@ -485,6 +494,58 @@ createApp({
         },
         toggleTimeFeatureSection() {
             this.timeFeatureExpanded = !this.timeFeatureExpanded;
+        },
+        onCloneReferenceChange(event) {
+            const [file] = event.target.files || [];
+            this.cloneReferenceFile = file || null;
+        },
+        appendCloneMessage(message) {
+            this.cloneMessages.push(message);
+        },
+        async handleClone() {
+            if (!this.cloneReferenceFile) {
+                alert('请选择参考音频文件！');
+                return;
+            }
+            if (!this.cloneText.trim()) {
+                alert('请输入要合成的文本！');
+                return;
+            }
+
+            this.appendCloneMessage('正在上传并合成，请稍候...');
+            this.isCloning = true;
+            this.cloneOutputPath = null;
+
+            const formData = new FormData();
+            formData.append('referenceAudio', this.cloneReferenceFile);
+            formData.append('text', this.cloneText.trim());
+            formData.append('language', this.cloneLanguage);
+
+            try {
+                const response = await fetch('/voice-clone', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const { rawPayload, parsedPayload } = await this.parseResponse(response);
+
+                if (response.ok) {
+                    const message = parsedPayload?.message || rawPayload || '合成成功';
+                    this.appendCloneMessage(`✅ ${message}`);
+                    
+                    if (parsedPayload?.outputPath) {
+                        this.cloneOutputPath = '/' + parsedPayload.outputPath;
+                    }
+                } else {
+                    const errorMessage = parsedPayload?.message || rawPayload || '合成失败';
+                    this.appendCloneMessage(`❌ ${errorMessage}`);
+                }
+            } catch (error) {
+                console.error('声音克隆时发生错误', error);
+                this.appendCloneMessage(`❌ 发生错误: ${error.message}`);
+            } finally {
+                this.isCloning = false;
+            }
         }
     }
 }).mount('#app');

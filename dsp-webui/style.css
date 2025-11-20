@@ -164,6 +164,12 @@ body {
     gap: 12px;
 }
 
+.output-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
 .link-button {
     background: transparent;
     color: var(--primary);
@@ -409,9 +415,165 @@ body {
     font-weight: 600;
 }
 
+/* Tabs 样式 */
+.tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 8px;
+    border-radius: var(--radius);
+    box-shadow: 0 10px 25px rgba(31, 45, 61, 0.08);
+}
+
+.tab-button {
+    flex: 1;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.tab-button:hover {
+    background: rgba(75, 123, 236, 0.08);
+    color: var(--text-primary);
+}
+
+.tab-button.active {
+    background: linear-gradient(135deg, var(--primary) 0%, #5d8bfd 100%);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(75, 123, 236, 0.25);
+}
+
+/* 声音克隆样式 */
+.clone-grid {
+    grid-template-columns: 1fr;
+}
+
+.clone-card {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.clone-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.file-upload-group {
+    display: flex;
+    gap: 12px;
+}
+
+.clone-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(99, 110, 120, 0.2);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.95);
+    resize: vertical;
+    transition: var(--transition);
+}
+
+.clone-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(75, 123, 236, 0.1);
+}
+
+.clone-select {
+    padding: 12px 16px;
+    border: 1px solid rgba(99, 110, 120, 0.2);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.clone-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(75, 123, 236, 0.1);
+}
+
+.clone-result {
+    margin-top: 24px;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(32, 191, 107, 0.12) 0%, rgba(75, 207, 250, 0.12) 100%);
+    border: 2px solid rgba(32, 191, 107, 0.3);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(32, 191, 107, 0.15);
+}
+
+.clone-result h3 {
+    margin: 0 0 16px;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.clone-audio {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.download-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--success);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--radius);
+    font-weight: 600;
+    transition: var(--transition);
+    box-shadow: 0 8px 20px rgba(32, 191, 107, 0.25);
+}
+
+.download-link:hover {
+    background: #1aa858;
+    box-shadow: 0 10px 25px rgba(32, 191, 107, 0.3);
+}
+
 @media (max-width: 640px) {
     .app {
         padding: 32px 16px 56px;
+    }
+
+    .tabs {
+        gap: 4px;
+        padding: 6px;
+    }
+
+    .tab-button {
+        padding: 10px 16px;
+        font-size: 0.95rem;
     }
 
     .upload-form {

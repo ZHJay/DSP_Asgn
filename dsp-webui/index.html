@@ -9,11 +9,28 @@
 <body>
     <div id="app" class="app">
         <header class="hero">
-            <h1>音频预处理控制台</h1>
-            <p>上传 WAV 文件完成预处理，并触发时域或频域分析。</p>
+            <h1>音频处理控制台</h1>
+            <p>数字识别与声音克隆的综合平台</p>
         </header>
 
-        <main class="main-grid">
+        <nav class="tabs">
+            <button 
+                class="tab-button" 
+                :class="{ active: activeTab === 'recognition' }"
+                @click="activeTab = 'recognition'"
+            >
+                数字识别
+            </button>
+            <button 
+                class="tab-button" 
+                :class="{ active: activeTab === 'clone' }"
+                @click="activeTab = 'clone'"
+            >
+                声音克隆
+            </button>
+        </nav>
+
+        <main class="main-grid" v-show="activeTab === 'recognition'">
             <section class="card upload-card">
                 <h2>文件上传</h2>
                 <form class="upload-form" enctype="multipart/form-data" @submit.prevent="handleUpload">
@@ -114,10 +131,16 @@
             <section class="card output-card">
                 <div class="output-header">
                     <h2>分析日志</h2>
-                    <button class="link-button" type="button" @click="messages = []" :disabled="messages.length === 0">清空</button>
+                    <div class="output-actions">
+                        <button class="link-button" type="button" @click="recognitionLogExpanded = !recognitionLogExpanded">
+                            {{ recognitionLogExpanded ? '收起' : '展开' }}
+                        </button>
+                        <button class="link-button" type="button" @click="messages = []" :disabled="messages.length === 0">清空</button>
+                    </div>
                 </div>
-                <p v-if="messages.length === 0" class="placeholder">当前暂无消息，先上传音频开始流程。</p>
-                <ul v-else class="message-list">
+                <div v-show="recognitionLogExpanded">
+                    <p v-if="messages.length === 0" class="placeholder">当前暂无消息，先上传音频开始流程。</p>
+                    <ul v-else class="message-list">
                     <li
                         v-for="(message, index) in messages"
                         :key="index"
@@ -133,6 +156,89 @@
                         <span class="message-text">{{ message }}</span>
                     </li>
                 </ul>
+                </div>
+            </section>
+        </main>
+
+        <main class="main-grid clone-grid" v-show="activeTab === 'clone'">
+            <section class="card clone-card">
+                <h2>声音克隆</h2>
+                <p class="hint">上传参考音频并输入文本，生成克隆语音</p>
+                
+                <div class="clone-form">
+                    <div class="form-group">
+                        <label>参考音频：</label>
+                        <div class="file-upload-group">
+                            <label class="file-input">
+                                <span>{{ cloneReferenceFile ? cloneReferenceFile.name : '选择 WAV 文件' }}</span>
+                                <input type="file" ref="cloneReferenceInput" accept=".wav" @change="onCloneReferenceChange">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>要合成的文本：</label>
+                        <textarea 
+                            v-model="cloneText" 
+                            class="clone-textarea" 
+                            placeholder="输入要合成的文本内容..."
+                            rows="4"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>语言：</label>
+                        <select v-model="cloneLanguage" class="clone-select">
+                            <option value="zh-cn">中文</option>
+                            <option value="en">英文</option>
+                        </select>
+                    </div>
+
+                    <button 
+                        class="primary-button" 
+                        @click="handleClone" 
+                        :disabled="isCloning || !cloneReferenceFile || !cloneText.trim()"
+                    >
+                        {{ isCloning ? '合成中…' : '开始合成' }}
+                    </button>
+                </div>
+
+                <div v-if="cloneOutputPath" class="clone-result">
+                    <h3>✨ 合成结果</h3>
+                    <audio controls :src="cloneOutputPath" class="clone-audio"></audio>
+                    <a :href="cloneOutputPath" download class="download-link">下载音频</a>
+                </div>
+            </section>
+
+            <section class="card output-card">
+                <div class="output-header">
+                    <h2>合成日志</h2>
+                    <div class="output-actions">
+                        <button class="link-button" type="button" @click="cloneLogExpanded = !cloneLogExpanded">
+                            {{ cloneLogExpanded ? '收起' : '展开' }}
+                        </button>
+                        <button class="link-button" type="button" @click="cloneMessages = []" :disabled="cloneMessages.length === 0">清空</button>
+                    </div>
+                </div>
+                <div v-show="cloneLogExpanded">
+                    <p v-if="cloneMessages.length === 0" class="placeholder">暂无消息</p>
+                    <ul v-else class="message-list">
+                        <li
+                            v-for="(message, index) in cloneMessages"
+                            :key="index"
+                            :class="[
+                                'message-item',
+                                {
+                                    'message-success': message.includes('成功') || message.includes('完成'),
+                                    'message-error': message.includes('失败') || message.includes('错误')
+                                }
+                            ]"
+                        >
+                            <span class="message-index">{{ index + 1 }}</span>
+                            <span class="message-text">{{ message }}</span>
+                        </li>
+                    </ul>
+                </div>
             </section>
         </main>
     </div>

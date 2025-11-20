@@ -1,5 +1,5 @@
 Transformers.py        （注意改成自己的路径，第一次运行清按照顺序一步一步来）
-启动：python transformers.py --audio_root "/Users/zhanghjay/Desktop/DSP/frequencydomain/样本"
+启动：python transformers.py --audio_root "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/样本"
 
 可视化-完整模型：python visualize.py --snapshot outputs/embedding_snapshot.pt --attn outputs/attention_weights.pt
 

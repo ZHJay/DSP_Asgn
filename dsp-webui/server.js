@@ -8,8 +8,9 @@ const app = express();
 const PORT = 3000;
 const uploadDir = path.join(__dirname, 'uploads');
 const processedDir = path.join(__dirname, 'processed');
+const cloneOutputDir = path.join(__dirname, 'clone_output');
 
-for (const dirPath of [uploadDir, processedDir]) {
+for (const dirPath of [uploadDir, processedDir, cloneOutputDir]) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
@@ -119,6 +120,48 @@ app.post('/frequency-domain', async (req, res) => {
     }
 });
 
+// 声音克隆接口
+app.post('/voice-clone', upload.single('referenceAudio'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: '未收到参考音频文件' });
+    }
+
+    const { text, language = 'zh-cn' } = req.body;
+    if (!text || !text.trim()) {
+        return res.status(400).json({ message: '缺少要合成的文本' });
+    }
+
+    try {
+        const referenceAudioPath = req.file.path;
+        
+        // 生成输出文件名：输入文件名（不含扩展名）+ 时间戳（精确到秒）
+        const originalName = path.parse(req.file.originalname).name;
+        const now = new Date();
+        const timestamp = now.getFullYear() +
+            String(now.getMonth() + 1).padStart(2, '0') +
+            String(now.getDate()).padStart(2, '0') +
+            '_' +
+            String(now.getHours()).padStart(2, '0') +
+            String(now.getMinutes()).padStart(2, '0') +
+            String(now.getSeconds()).padStart(2, '0');
+        const outputFileName = `${originalName}_${timestamp}.wav`;
+        const outputPath = path.join(cloneOutputDir, outputFileName);
+
+        await runVoiceClone(referenceAudioPath, text.trim(), outputPath, language);
+
+        const relativePath = path.relative(__dirname, outputPath);
+        console.log(`声音克隆完成: ${outputFileName}`);
+
+        res.json({
+            message: '声音克隆完成',
+            outputPath: relativePath
+        });
+    } catch (error) {
+        console.error('声音克隆失败:', error);
+        res.status(500).json({ message: '声音克隆失败，请稍后重试。' });
+    }
+});
+
 async function preprocessWav(inputPath, outputPath) {
     // TODO: 添加实际的预处理逻辑；目前仅复制文件
     await fs.promises.copyFile(inputPath, outputPath);
@@ -146,7 +189,7 @@ function cleanupTempDirs() {
 
     cleanedUp = true;
 
-    for (const dirPath of [uploadDir, processedDir]) {
+    for (const dirPath of [uploadDir, processedDir, cloneOutputDir]) {
         try {
             if (!fs.existsSync(dirPath)) {
                 continue;
@@ -195,6 +238,47 @@ function runTimeDomainAnalysis(targetPath) {
 
 function runSttAnalysis(targetPath) {
     return executePythonScript('stt_api.py', targetPath);
+}
+
+function runVoiceClone(referenceAudioPath, text, outputPath, language) {
+    return new Promise((resolve, reject) => {
+        const pythonExecutable = process.env.PYTHON_PATH || 'python';
+        const scriptPath = path.join(__dirname, 'tts_api.py');
+
+        const child = spawn(pythonExecutable, [
+            scriptPath,
+            '--reference', referenceAudioPath,
+            '--text', text,
+            '--output', outputPath,
+            '--language', language
+        ], {
+            cwd: __dirname,
+            windowsHide: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => {
+            reject(error);
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error(stderr || `TTS 脚本以状态码 ${code} 退出`));
+            }
+
+            resolve({ success: true, stdout });
+        });
+    });
 }
 
 function executePythonScript(scriptName, targetPath) {
