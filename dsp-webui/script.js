@@ -20,6 +20,15 @@ createApp({
             cloneOutputPath: null,
             cloneLogExpanded: false,
             recognitionLogExpanded: false,
+            // Chat tab
+            chatReferenceFile: null,
+            chatLanguage: 'zh-cn',
+            chatSystemPrompt: 'You are a friendly conversational assistant.',
+            chatHistory: [],
+            chatMessages: [],
+            chatAudioFile: null,
+            chatTextInput: '',
+            isChatting: false,
             chartState: {
                 time: {
                     key: 'time',
@@ -545,6 +554,145 @@ createApp({
                 this.appendCloneMessage(`❌ 发生错误: ${error.message}`);
             } finally {
                 this.isCloning = false;
+            }
+        },
+        onChatReferenceChange(event) {
+            const [file] = event.target.files || [];
+            this.chatReferenceFile = file || null;
+        },
+        onChatAudioChange(event) {
+            const [file] = event.target.files || [];
+            this.chatAudioFile = file || null;
+        },
+        resetChat() {
+            this.chatHistory = [];
+            this.chatMessages = [{ role: 'system', content: this.chatSystemPrompt }];
+            this.chatAudioFile = null;
+            this.chatTextInput = '';
+            if (this.$refs.chatAudioInput) {
+                this.$refs.chatAudioInput.value = '';
+            }
+        },
+        async sendChatMessage() {
+            if (!this.chatReferenceFile) {
+                alert('请先上传参考音色！');
+                return;
+            }
+
+            if (!this.chatAudioFile && !this.chatTextInput.trim()) {
+                alert('请上传音频或输入文本！');
+                return;
+            }
+
+            this.isChatting = true;
+            
+            try {
+                let userText = '';
+
+                // 1. 如果有音频文件，先进行STT
+                if (this.chatAudioFile) {
+                    const sttFormData = new FormData();
+                    sttFormData.append('audio', this.chatAudioFile);
+                    sttFormData.append('language', this.chatLanguage);
+
+                    const sttResponse = await fetch('/chat/stt', {
+                        method: 'POST',
+                        body: sttFormData
+                    });
+
+                    if (!sttResponse.ok) {
+                        const error = await sttResponse.json();
+                        throw new Error(error.message || 'STT失败');
+                    }
+
+                    const sttResult = await sttResponse.json();
+                    userText = sttResult.text || '[未识别]';
+                } else {
+                    userText = this.chatTextInput.trim();
+                }
+
+                // 添加用户消息到界面
+                this.chatHistory.push({
+                    role: 'user',
+                    content: userText,
+                    time: this.formatTimestamp()
+                });
+
+                // 滚动到底部
+                this.$nextTick(() => {
+                    const chatHistoryEl = this.$refs.chatHistory;
+                    if (chatHistoryEl) {
+                        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+                    }
+                });
+
+                // 2. 调用LLM
+                if (this.chatMessages.length === 0) {
+                    this.chatMessages = [{ role: 'system', content: this.chatSystemPrompt }];
+                }
+                this.chatMessages.push({ role: 'user', content: userText });
+
+                const llmResponse = await fetch('/chat/llm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: this.chatMessages })
+                });
+
+                if (!llmResponse.ok) {
+                    const error = await llmResponse.json();
+                    throw new Error(error.message || 'LLM调用失败');
+                }
+
+                const llmResult = await llmResponse.json();
+                const assistantText = llmResult.response || '[无回复]';
+                
+                this.chatMessages.push({ role: 'assistant', content: assistantText });
+
+                // 3. 使用TTS合成语音
+                const ttsFormData = new FormData();
+                ttsFormData.append('referenceAudio', this.chatReferenceFile);
+                ttsFormData.append('text', assistantText);
+                ttsFormData.append('language', this.chatLanguage);
+
+                const ttsResponse = await fetch('/chat/tts', {
+                    method: 'POST',
+                    body: ttsFormData
+                });
+
+                let audioPath = null;
+                if (ttsResponse.ok) {
+                    const ttsResult = await ttsResponse.json();
+                    audioPath = '/' + ttsResult.outputPath;
+                }
+
+                // 添加AI回复到界面
+                this.chatHistory.push({
+                    role: 'assistant',
+                    content: assistantText,
+                    audioPath: audioPath,
+                    time: this.formatTimestamp()
+                });
+
+                // 清空输入
+                this.chatAudioFile = null;
+                this.chatTextInput = '';
+                if (this.$refs.chatAudioInput) {
+                    this.$refs.chatAudioInput.value = '';
+                }
+
+                // 再次滚动到底部
+                this.$nextTick(() => {
+                    const chatHistoryEl = this.$refs.chatHistory;
+                    if (chatHistoryEl) {
+                        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+                    }
+                });
+
+            } catch (error) {
+                console.error('对话处理失败:', error);
+                alert(`对话失败: ${error.message}`);
+            } finally {
+                this.isChatting = false;
             }
         }
     }

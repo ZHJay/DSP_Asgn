@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Browser-based chat UI built on top of zero-raw.py utilities.
+Browser-based chat UI built on top of zero-raw.py utilities with LOCAL LLM.
 
 Pipeline per turn:
-1. User records audio in the browser (Gradio microphone).
+1. User records audio in the browser (Gradio microphone) or uploads audio file.
 2. Server transcribes speech via Whisper.
-3. Text is sent to DeepSeek Chat (fast LLM response).
+3. Text is sent to LOCAL LLM running on 127.0.0.1:1234 (fast LLM response).
 4. Reply text is synthesized by our XTTS-based TTS.
 5. Browser shows chat history and plays the generated wav.
 """
@@ -36,7 +36,7 @@ zero_raw.Config = SharedLayerConfig
 # Globals / configs
 # -----------------------------------------------------------------------------
 
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-0f16d4357768478e9b50935fb7cfd614")
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:1234/v1/chat/completions")
 WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
 WHISPER_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 OUTPUT_DIR = Path(zero_raw.tts_config.output_dir)
@@ -47,23 +47,39 @@ tts_system = zero_raw.UnifiedTTSSystem(tts_model="xtts")
 
 
 # -----------------------------------------------------------------------------
-# DeepSeek client
+# Local LLM client
 # -----------------------------------------------------------------------------
 
-def deepseek_chat(messages: List[Dict[str, str]]) -> str:
+def local_llm_chat(messages: List[Dict[str, str]]) -> str:
+    """
+    Call local LLM running on 127.0.0.1:1234
+    Compatible with OpenAI API format (e.g., LM Studio, llama.cpp server, etc.)
+    """
     headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = {"model": "deepseek-chat", "messages": messages, "stream": False}
-    resp = requests.post(
-        os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions"),
-        headers=headers,
-        json=payload,
-        timeout=60,
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    payload = {
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": -1,
+        "stream": False
+    }
+    
+    try:
+        resp = requests.post(
+            LOCAL_LLM_URL,
+            headers=headers,
+            json=payload,
+            timeout=120  # 本地模型可能需要更长时间
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except requests.exceptions.ConnectionError:
+        raise Exception("无法连接到本地LLM服务 (localhost:1234)。请确保本地模型服务已启动。")
+    except requests.exceptions.Timeout:
+        raise Exception("本地LLM响应超时，请检查模型运行状态。")
+    except Exception as e:
+        raise Exception(f"本地LLM调用失败: {str(e)}")
 
 
 # -----------------------------------------------------------------------------
@@ -115,10 +131,10 @@ def chat_pipeline(
     history.append((user_text, "…"))
 
     try:
-        assistant_text = deepseek_chat(messages_state)
+        assistant_text = local_llm_chat(messages_state)
     except Exception as exc:
-        history[-1] = (user_text, f"[DeepSeek 调用失败: {exc}]")
-        return history, messages_state, None, f"DeepSeek API 调用失败: {exc}"
+        history[-1] = (user_text, f"[本地LLM调用失败: {exc}]")
+        return history, messages_state, None, f"本地LLM调用失败: {exc}"
 
     messages_state.append({"role": "assistant", "content": assistant_text})
     history[-1] = (user_text, assistant_text)
@@ -232,16 +248,17 @@ body {
 
 
 def main() -> None:
-    with gr.Blocks(title="Zero-Shot Digital Human", css=CUSTOM_CSS, theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="Zero-Shot Digital Human (Local LLM)", css=CUSTOM_CSS, theme=gr.themes.Soft()) as demo:
         with gr.Column(elem_classes=["hero-card"]):
             gr.Markdown("Proudly by **The Elite**", elem_classes=["the-elite"])
             gr.Markdown(
-                "Zero-Shot Digital Human",
+                "Zero-Shot Digital Human (本地LLM版本)",
                 elem_classes=["hero-title"],
             )
             gr.Markdown(
-                "对话式界面，实时完成语音采集、Whisper 转写、DeepSeek 回复与 XTTS 克隆音色回放，让本地数字人体验更具质感。"
-                "<br>上传目标音色，按住麦克风讲话，即可获得专属音色的即时语音反馈。",
+                "对话式界面，实时完成语音采集、Whisper 转写、本地LLM回复与 XTTS 克隆音色回放，让本地数字人体验更具质感。"
+                "<br>上传目标音色，按住麦克风讲话或上传音频文件，即可获得专属音色的即时语音反馈。"
+                "<br><strong>⚠️ 请确保本地LLM服务运行在 localhost:1234</strong>",
                 elem_classes=["hero-subtitle"],
             )
 
@@ -294,14 +311,23 @@ def main() -> None:
     # 使用 localhost 以支持 Safari 麦克风访问
     # Safari 要求 HTTPS 或 localhost 才能访问麦克风
     print("\n" + "="*60)
-    print("🎤 麦克风访问提示:")
+    print("🤖 本地LLM数字人系统")
     print("="*60)
-    print("1. 请在 Safari 中访问: http://localhost:7860")
+    print("📋 启动检查清单:")
+    print("   ✓ 本地LLM服务运行在: http://localhost:1234/v1")
+    print("   ✓ Web界面将运行在: http://localhost:7860")
+    print("")
+    print("🎤 麦克风访问提示:")
+    print("1. 请在浏览器中访问: http://localhost:7860")
     print("2. 首次使用会弹出麦克风权限请求，请点击'允许'")
     print("3. 如遇问题，请检查:")
-    print("   - 系统设置 > 隐私与安全性 > 麦克风 > 确保 Safari 已开启")
-    print("   - Safari > 设置 > 网站 > 麦克风 > localhost 设为'允许'")
-    print("4. 推荐使用 Chrome 浏览器以获得更好的兼容性")
+    print("   - 系统设置 > 隐私与安全性 > 麦克风 > 确保浏览器已开启")
+    print("   - 推荐使用 Chrome 浏览器以获得更好的兼容性")
+    print("")
+    print("💡 本地LLM服务推荐:")
+    print("   - LM Studio: https://lmstudio.ai/")
+    print("   - Ollama (需配置为OpenAI兼容模式)")
+    print("   - llama.cpp server")
     print("="*60 + "\n")
     
     demo.launch(

@@ -120,6 +120,81 @@ app.post('/frequency-domain', async (req, res) => {
     }
 });
 
+// 对话接口 - STT
+app.post('/chat/stt', upload.single('audio'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: '未收到音频文件' });
+    }
+
+    const { language = 'zh-cn' } = req.body;
+
+    try {
+        const audioPath = req.file.path;
+        const result = await runChatSTT(audioPath, language);
+        
+        res.json({
+            text: result.text,
+            success: true
+        });
+    } catch (error) {
+        console.error('STT失败:', error);
+        res.status(500).json({ message: 'STT失败，请稍后重试。', error: error.message });
+    }
+});
+
+// 对话接口 - LLM
+app.post('/chat/llm', async (req, res) => {
+    const { messages } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ message: '缺少消息历史' });
+    }
+
+    try {
+        const result = await runChatLLM(messages);
+        
+        res.json({
+            response: result.response,
+            success: true
+        });
+    } catch (error) {
+        console.error('LLM调用失败:', error);
+        res.status(500).json({ message: 'LLM调用失败，请稍后重试。', error: error.message });
+    }
+});
+
+// 对话接口 - TTS
+app.post('/chat/tts', upload.single('referenceAudio'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: '未收到参考音频文件' });
+    }
+
+    const { text, language = 'zh-cn' } = req.body;
+    
+    if (!text || !text.trim()) {
+        return res.status(400).json({ message: '缺少要合成的文本' });
+    }
+
+    try {
+        const referenceAudioPath = req.file.path;
+        const timestamp = Date.now();
+        const outputFileName = `chat_reply_${timestamp}.wav`;
+        const outputPath = path.join(cloneOutputDir, outputFileName);
+
+        await runChatTTS(text.trim(), referenceAudioPath, outputPath, language);
+
+        const relativePath = path.relative(__dirname, outputPath);
+        
+        res.json({
+            outputPath: relativePath,
+            success: true
+        });
+    } catch (error) {
+        console.error('TTS失败:', error);
+        res.status(500).json({ message: 'TTS失败，请稍后重试。', error: error.message });
+    }
+});
+
 // 声音克隆接口
 app.post('/voice-clone', upload.single('referenceAudio'), async (req, res) => {
     if (!req.file) {
@@ -238,6 +313,152 @@ function runTimeDomainAnalysis(targetPath) {
 
 function runSttAnalysis(targetPath) {
     return executePythonScript('stt_api.py', targetPath);
+}
+
+function runChatSTT(audioPath, language) {
+    return new Promise((resolve, reject) => {
+        const pythonExecutable = process.env.PYTHON_PATH || 'python';
+        const scriptPath = path.join(__dirname, 'chat_api.py');
+
+        const child = spawn(pythonExecutable, [
+            scriptPath,
+            '--mode', 'stt',
+            '--audio', audioPath,
+            '--language', language
+        ], {
+            cwd: __dirname,
+            windowsHide: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => {
+            reject(error);
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error(stderr || `STT 脚本以状态码 ${code} 退出`));
+            }
+
+            try {
+                // 只解析最后一行的 JSON，忽略其他输出
+                const lines = stdout.trim().split('\n');
+                const jsonLine = lines[lines.length - 1];
+                const parsed = JSON.parse(jsonLine);
+                resolve(parsed);
+            } catch (parseError) {
+                reject(new Error(`解析 STT 输出失败: ${parseError.message}`));
+            }
+        });
+    });
+}
+
+function runChatLLM(messages) {
+    const messagesJson = JSON.stringify(messages);
+    return new Promise((resolve, reject) => {
+        const pythonExecutable = process.env.PYTHON_PATH || 'python';
+        const scriptPath = path.join(__dirname, 'chat_api.py');
+
+        const child = spawn(pythonExecutable, [
+            scriptPath,
+            '--mode', 'llm',
+            '--messages', messagesJson
+        ], {
+            cwd: __dirname,
+            windowsHide: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => {
+            reject(error);
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error(stderr || `LLM 脚本以状态码 ${code} 退出`));
+            }
+
+            try {
+                // 只解析最后一行的 JSON，忽略其他输出
+                const lines = stdout.trim().split('\n');
+                const jsonLine = lines[lines.length - 1];
+                const parsed = JSON.parse(jsonLine);
+                resolve(parsed);
+            } catch (parseError) {
+                reject(new Error(`解析 LLM 输出失败: ${parseError.message}`));
+            }
+        });
+    });
+}
+
+function runChatTTS(text, referenceAudioPath, outputPath, language) {
+    return new Promise((resolve, reject) => {
+        const pythonExecutable = process.env.PYTHON_PATH || 'python';
+        const scriptPath = path.join(__dirname, 'chat_api.py');
+
+        const child = spawn(pythonExecutable, [
+            scriptPath,
+            '--mode', 'tts',
+            '--text', text,
+            '--reference', referenceAudioPath,
+            '--output', outputPath,
+            '--language', language
+        ], {
+            cwd: __dirname,
+            windowsHide: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => {
+            reject(error);
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error(stderr || `TTS 脚本以状态码 ${code} 退出`));
+            }
+
+            try {
+                // 只解析最后一行的 JSON，忽略其他输出
+                const lines = stdout.trim().split('\n');
+                const jsonLine = lines[lines.length - 1];
+                const parsed = JSON.parse(jsonLine);
+                resolve(parsed);
+            } catch (parseError) {
+                reject(new Error(`解析 TTS 输出失败: ${parseError.message}`));
+            }
+        });
+    });
 }
 
 function runVoiceClone(referenceAudioPath, text, outputPath, language) {

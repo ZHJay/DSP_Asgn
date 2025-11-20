@@ -28,5 +28,5 @@ python plot_ablation.py
 智能锁：
 python smart_lock.py --audio "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/lock3.wav" --model "outputs/best_model.pt" --metrics "outputs/metrics.json"
 ---------正确密码-------------
-python smart_lock.py --audio "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/lock3.wav" --model "outputs/best_model.pt" --metrics "outputs/metrics.json"
+python smart_lock.py --audio "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/lock1.wav" --model "outputs/best_model.pt" --metrics "outputs/metrics.json"
 --------错误密码-------------
