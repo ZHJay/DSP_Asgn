@@ -39,6 +39,37 @@ createApp({
             mediaRecorder: null,
             audioChunks: [],
             recordingError: null,
+            // Recognition tab recording
+            isRecognitionRecording: false,
+            hasRecognitionRecording: false,
+            recognitionRecordedBlob: null,
+            recognitionMediaRecorder: null,
+            recognitionAudioChunks: [],
+            recognitionRecordingError: null,
+            // Clone tab recording
+            isCloneRecording: false,
+            hasCloneRecording: false,
+            cloneRecordedBlob: null,
+            cloneMediaRecorder: null,
+            cloneAudioChunks: [],
+            cloneRecordingError: null,
+            // Smart Lock tab
+            availableOwners: [],
+            lockOwner: '',
+            lockPasscode: '',
+            lockDigits: 4,
+            lockAudioFile: null,
+            isLockRecording: false,
+            hasLockRecording: false,
+            lockRecordedBlob: null,
+            lockMediaRecorder: null,
+            lockAudioChunks: [],
+            lockRecordingError: null,
+            isVerifying: false,
+            lockResult: null,
+            lockMessages: [],
+            lockLogExpanded: true,
+            lockDetailsExpanded: false,
             chartState: {
                 time: {
                     key: 'time',
@@ -74,6 +105,14 @@ createApp({
     },
     created() {
         this.resetAllConfidenceTemplates();
+        this.loadAvailableOwners();
+    },
+    watch: {
+        activeTab(newTab) {
+            if (newTab === 'lock' && this.availableOwners.length === 0) {
+                this.loadAvailableOwners();
+            }
+        }
     },
     methods: {
         onFileChange(event) {
@@ -83,6 +122,9 @@ createApp({
             if (file) {
                 this.lastProcessedFile = null;
                 this.resetAllConfidenceTemplates();
+                // 清除录音
+                this.recognitionRecordedBlob = null;
+                this.hasRecognitionRecording = false;
             }
         },
         appendMessage(message) {
@@ -111,8 +153,9 @@ createApp({
             this.selectedFile = null;
         },
         async handleUpload() {
-            if (!this.selectedFile) {
-                alert('请上传一个 WAV 文件！');
+            const fileToUpload = this.selectedFile || this.recognitionRecordedBlob;
+            if (!fileToUpload) {
+                alert('请上传或录制一个 WAV 文件！');
                 return;
             }
 
@@ -120,7 +163,7 @@ createApp({
             this.isUploading = true;
 
             const formData = new FormData();
-            formData.append('wavFile', this.selectedFile);
+            formData.append('wavFile', fileToUpload, 'recording.wav');
 
             try {
                 const response = await fetch('/process', {
@@ -157,6 +200,9 @@ createApp({
             } finally {
                 this.isUploading = false;
                 this.resetFileInput();
+                // 清除录音
+                this.recognitionRecordedBlob = null;
+                this.hasRecognitionRecording = false;
             }
         },
         async requestDomain(endpoint, label, domainKey) {
@@ -517,13 +563,19 @@ createApp({
         onCloneReferenceChange(event) {
             const [file] = event.target.files || [];
             this.cloneReferenceFile = file || null;
+            if (file) {
+                // 清除录音
+                this.cloneRecordedBlob = null;
+                this.hasCloneRecording = false;
+            }
         },
         appendCloneMessage(message) {
             this.cloneMessages.push(message);
         },
         async handleClone() {
-            if (!this.cloneReferenceFile) {
-                alert('请选择参考音频文件！');
+            const referenceAudio = this.cloneReferenceFile || this.cloneRecordedBlob;
+            if (!referenceAudio) {
+                alert('请选择或录制参考音频文件！');
                 return;
             }
             if (!this.cloneText.trim()) {
@@ -536,7 +588,7 @@ createApp({
             this.cloneOutputPath = null;
 
             const formData = new FormData();
-            formData.append('referenceAudio', this.cloneReferenceFile);
+            formData.append('referenceAudio', referenceAudio, 'reference.wav');
             formData.append('text', this.cloneText.trim());
             formData.append('language', this.cloneLanguage);
 
@@ -884,6 +936,299 @@ createApp({
                     this.chatProcessingStep = null;
                     this.chatProcessingMessage = '';
                 }, 2000);
+            }
+        },
+        // ====== Smart Lock Methods ======
+        async loadAvailableOwners() {
+            try {
+                const response = await fetch('/smart-lock/owners');
+                if (response.ok) {
+                    const result = await response.json();
+                    this.availableOwners = result.owners || [];
+                }
+            } catch (error) {
+                console.error('加载主人列表失败:', error);
+                this.availableOwners = ['bck', 'cqc', 'xsq', 'zhj']; // 备用列表
+            }
+        },
+        onLockAudioChange(event) {
+            const [file] = event.target.files || [];
+            this.lockAudioFile = file || null;
+            if (file) {
+                this.lockRecordedBlob = null;
+                this.hasLockRecording = false;
+            }
+        },
+        async toggleLockRecording() {
+            if (this.isLockRecording) {
+                this.stopLockRecording();
+            } else {
+                await this.startLockRecording();
+            }
+        },
+        async startLockRecording() {
+            try {
+                this.lockRecordingError = null;
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                const options = { mimeType: 'audio/webm' };
+                this.lockMediaRecorder = new MediaRecorder(stream, options);
+                this.lockAudioChunks = [];
+                
+                this.lockMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.lockAudioChunks.push(event.data);
+                    }
+                };
+                
+                this.lockMediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(this.lockAudioChunks, { type: 'audio/webm' });
+                    
+                    try {
+                        const wavBlob = await this.convertToWav(audioBlob);
+                        this.lockRecordedBlob = wavBlob;
+                        this.hasLockRecording = true;
+                        this.lockAudioFile = null;
+                        if (this.$refs.lockAudioInput) {
+                            this.$refs.lockAudioInput.value = '';
+                        }
+                    } catch (error) {
+                        console.error('音频转换失败:', error);
+                        this.lockRecordingError = '音频转换失败，请重试';
+                        this.hasLockRecording = false;
+                    }
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                this.lockMediaRecorder.start();
+                this.isLockRecording = true;
+                
+            } catch (error) {
+                console.error('麦克风访问失败:', error);
+                if (error.name === 'NotAllowedError') {
+                    this.lockRecordingError = '麦克风权限被拒绝';
+                } else if (error.name === 'NotFoundError') {
+                    this.lockRecordingError = '未找到麦克风设备';
+                } else {
+                    this.lockRecordingError = `麦克风访问失败: ${error.message}`;
+                }
+            }
+        },
+        stopLockRecording() {
+            if (this.lockMediaRecorder && this.lockMediaRecorder.state !== 'inactive') {
+                this.lockMediaRecorder.stop();
+                this.isLockRecording = false;
+            }
+        },
+        appendLockMessage(message) {
+            this.lockMessages.push(message);
+        },
+        async verifyLock() {
+            if (!this.lockOwner || !this.lockPasscode) {
+                alert('请设置主人和密码！');
+                return;
+            }
+            
+            const audioToVerify = this.lockAudioFile || this.lockRecordedBlob;
+            if (!audioToVerify) {
+                alert('请上传音频或录制音频！');
+                return;
+            }
+            
+            this.isVerifying = true;
+            this.lockResult = null;
+            this.appendLockMessage(`开始验证: 主人=${this.lockOwner}, 密码=${this.lockPasscode}`);
+            
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioToVerify, 'lock_audio.wav');
+                formData.append('owner', this.lockOwner);
+                formData.append('passcode', this.lockPasscode);
+                formData.append('digits', this.lockDigits.toString());
+                
+                const response = await fetch('/smart-lock/verify', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    this.lockResult = result;
+                    
+                    if (result.unlock) {
+                        this.appendLockMessage(`✅ 验证成功！识别: ${result.recognized_speaker} / ${result.recognized_digits}`);
+                    } else {
+                        let reason = '';
+                        if (!result.speaker_match && !result.passcode_match) {
+                            reason = '身份和密码均不匹配';
+                        } else if (!result.speaker_match) {
+                            reason = '身份不匹配';
+                        } else {
+                            reason = '密码不匹配';
+                        }
+                        this.appendLockMessage(`❌ 验证失败：${reason}`);
+                    }
+                } else {
+                    this.appendLockMessage(`❌ 验证出错: ${result.message || '未知错误'}`);
+                }
+                
+            } catch (error) {
+                console.error('智能锁验证失败:', error);
+                this.appendLockMessage(`❌ 验证失败: ${error.message}`);
+            } finally {
+                this.isVerifying = false;
+            }
+        },
+        // ====== Recognition Recording Methods ======
+        async toggleRecognitionRecording() {
+            if (this.isRecognitionRecording) {
+                this.stopRecognitionRecording();
+            } else {
+                await this.startRecognitionRecording();
+            }
+        },
+        async startRecognitionRecording() {
+            try {
+                this.recognitionRecordingError = null;
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                const options = { mimeType: 'audio/webm' };
+                this.recognitionMediaRecorder = new MediaRecorder(stream, options);
+                this.recognitionAudioChunks = [];
+                
+                this.recognitionMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.recognitionAudioChunks.push(event.data);
+                    }
+                };
+                
+                this.recognitionMediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(this.recognitionAudioChunks, { type: 'audio/webm' });
+                    
+                    try {
+                        const wavBlob = await this.convertToWav(audioBlob);
+                        this.recognitionRecordedBlob = wavBlob;
+                        this.hasRecognitionRecording = true;
+                        this.selectedFile = null;
+                        if (this.$refs.fileInput) {
+                            this.$refs.fileInput.value = '';
+                        }
+                    } catch (error) {
+                        console.error('音频转换失败:', error);
+                        this.recognitionRecordingError = '音频转换失败，请重试';
+                        this.hasRecognitionRecording = false;
+                    }
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                this.recognitionMediaRecorder.start();
+                this.isRecognitionRecording = true;
+                
+            } catch (error) {
+                console.error('麦克风访问失败:', error);
+                if (error.name === 'NotAllowedError') {
+                    this.recognitionRecordingError = '麦克风权限被拒绝';
+                } else if (error.name === 'NotFoundError') {
+                    this.recognitionRecordingError = '未找到麦克风设备';
+                } else {
+                    this.recognitionRecordingError = `麦克风访问失败: ${error.message}`;
+                }
+            }
+        },
+        stopRecognitionRecording() {
+            if (this.recognitionMediaRecorder && this.recognitionMediaRecorder.state !== 'inactive') {
+                this.recognitionMediaRecorder.stop();
+                this.isRecognitionRecording = false;
+            }
+        },
+        // ====== Clone Recording Methods ======
+        async toggleCloneRecording() {
+            if (this.isCloneRecording) {
+                this.stopCloneRecording();
+            } else {
+                await this.startCloneRecording();
+            }
+        },
+        async startCloneRecording() {
+            try {
+                this.cloneRecordingError = null;
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                const options = { mimeType: 'audio/webm' };
+                this.cloneMediaRecorder = new MediaRecorder(stream, options);
+                this.cloneAudioChunks = [];
+                
+                this.cloneMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.cloneAudioChunks.push(event.data);
+                    }
+                };
+                
+                this.cloneMediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(this.cloneAudioChunks, { type: 'audio/webm' });
+                    
+                    try {
+                        const wavBlob = await this.convertToWav(audioBlob);
+                        this.cloneRecordedBlob = wavBlob;
+                        this.hasCloneRecording = true;
+                        this.cloneReferenceFile = null;
+                        if (this.$refs.cloneReferenceInput) {
+                            this.$refs.cloneReferenceInput.value = '';
+                        }
+                    } catch (error) {
+                        console.error('音频转换失败:', error);
+                        this.cloneRecordingError = '音频转换失败，请重试';
+                        this.hasCloneRecording = false;
+                    }
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                this.cloneMediaRecorder.start();
+                this.isCloneRecording = true;
+                
+            } catch (error) {
+                console.error('麦克风访问失败:', error);
+                if (error.name === 'NotAllowedError') {
+                    this.cloneRecordingError = '麦克风权限被拒绝';
+                } else if (error.name === 'NotFoundError') {
+                    this.cloneRecordingError = '未找到麦克风设备';
+                } else {
+                    this.cloneRecordingError = `麦克风访问失败: ${error.message}`;
+                }
+            }
+        },
+        stopCloneRecording() {
+            if (this.cloneMediaRecorder && this.cloneMediaRecorder.state !== 'inactive') {
+                this.cloneMediaRecorder.stop();
+                this.isCloneRecording = false;
             }
         }
     }

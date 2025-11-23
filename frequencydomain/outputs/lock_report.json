@@ -1,83 +1,79 @@
 {
-  "audio": "/Users/zhanghjay/Desktop/DSP_Asgn/dsp-webui/uploads/lock_recording.wav",
-  "expected_passcode": "6378",
-  "recognized_digits": "5372",
-  "passcode_match": false,
-  "expected_owner": "zhj",
-  "recognized_speaker": "xsq",
-  "speaker_match": false,
-  "unlock": false,
+  "audio": "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/lock3.wav",
+  "expected_passcode": "3503",
+  "recognized_digits": "3503",
+  "unlock": true,
   "speaker_top3": [
     {
-      "name": "xsq",
-      "prob": 0.9274289608001709
-    },
-    {
-      "name": "zhj",
-      "prob": 0.05182136222720146
+      "name": "cqc",
+      "prob": 0.9999607801437378
     },
     {
       "name": "bck",
-      "prob": 0.01991310901939869
+      "prob": 2.333967677259352e-05
+    },
+    {
+      "name": "zhj",
+      "prob": 1.56614350999007e-05
     }
   ],
   "digits_per_segment_top3": [
     [
       {
-        "digit": "5",
-        "prob": 0.5184324383735657
+        "digit": "3",
+        "prob": 0.9782826900482178
       },
       {
-        "digit": "4",
-        "prob": 0.26823437213897705
+        "digit": "7",
+        "prob": 0.016111813485622406
       },
       {
         "digit": "6",
-        "prob": 0.07058540731668472
+        "prob": 0.0033122391905635595
       }
     ],
     [
       {
-        "digit": "3",
-        "prob": 0.9560049772262573
+        "digit": "5",
+        "prob": 0.9923855066299438
       },
       {
         "digit": "2",
-        "prob": 0.032308951020240784
-      },
-      {
-        "digit": "6",
-        "prob": 0.0056424252688884735
-      }
-    ],
-    [
-      {
-        "digit": "7",
-        "prob": 0.9844808578491211
+        "prob": 0.0033935809042304754
       },
       {
         "digit": "9",
-        "prob": 0.0153279360383749
-      },
-      {
-        "digit": "4",
-        "prob": 0.0001092604361474514
+        "prob": 0.003240287536755204
       }
     ],
     [
       {
-        "digit": "2",
-        "prob": 0.6381540894508362
+        "digit": "0",
+        "prob": 0.42849183082580566
       },
       {
-        "digit": "8",
-        "prob": 0.36003172397613525
+        "digit": "1",
+        "prob": 0.3500465154647827
       },
+      {
+        "digit": "5",
+        "prob": 0.11605148762464523
+      }
+    ],
+    [
       {
         "digit": "3",
-        "prob": 0.0007734824321232736
+        "prob": 0.9906492829322815
+      },
+      {
+        "digit": "7",
+        "prob": 0.00814616959542036
+      },
+      {
+        "digit": "4",
+        "prob": 0.0003968337259721011
       }
     ]
   ],
-  "tts_text": "密码错误且身份不匹配，拒绝开锁。"
+  "tts_text": "cqc，欢迎回家。"
 }

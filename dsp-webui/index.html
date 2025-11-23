@@ -35,20 +35,43 @@
             >
                 数字人对话
             </button>
+            <button 
+                class="tab-button" 
+                :class="{ active: activeTab === 'lock' }"
+                @click="activeTab = 'lock'"
+            >
+                智能门锁
+            </button>
         </nav>
 
         <main class="main-grid" v-show="activeTab === 'recognition'">
             <section class="card upload-card">
                 <h2>文件上传</h2>
-                <form class="upload-form" enctype="multipart/form-data" @submit.prevent="handleUpload">
-                    <label class="file-input">
-                        <span>{{ selectedFile ? selectedFile.name : '选择 WAV 文件' }}</span>
-                        <input type="file" ref="fileInput" accept=".wav" @change="onFileChange" required>
-                    </label>
-                    <button class="primary-button" type="submit" :disabled="isUploading">
+                <div class="upload-form-wrapper">
+                    <div class="input-method-row">
+                        <label class="file-input">
+                            <span>{{ selectedFile ? selectedFile.name : '📁 选择 WAV 文件' }}</span>
+                            <input type="file" ref="fileInput" accept=".wav" @change="onFileChange">
+                        </label>
+                        <span class="input-separator-text">或</span>
+                        <button 
+                            class="record-button"
+                            :class="{ recording: isRecognitionRecording, 'has-recording': hasRecognitionRecording }"
+                            @click="toggleRecognitionRecording"
+                            :disabled="isUploading"
+                            type="button"
+                        >
+                            <span class="record-icon">{{ isRecognitionRecording ? '⏹' : (hasRecognitionRecording ? '✓ 🎤' : '🎤') }}</span>
+                            <span class="record-text">{{ isRecognitionRecording ? '停止录音' : (hasRecognitionRecording ? '已录制' : '麦克风录音') }}</span>
+                        </button>
+                    </div>
+                    <div v-if="recognitionRecordingError" class="recording-error">
+                        ⚠️ {{ recognitionRecordingError }}
+                    </div>
+                    <button class="primary-button upload-submit-btn" @click="handleUpload" :disabled="isUploading || (!selectedFile && !recognitionRecordedBlob)" type="button">
                         {{ isUploading ? '处理中…' : '上传并预处理' }}
                     </button>
-                </form>
+                </div>
             </section>
 
             <section class="card action-card">
@@ -170,16 +193,30 @@
         <main class="main-grid clone-grid" v-show="activeTab === 'clone'">
             <section class="card clone-card">
                 <h2>声音克隆</h2>
-                <p class="hint">上传参考音频并输入文本，生成克隆语音</p>
+                <p class="hint">上传或录制参考音频并输入文本，生成克隆语音</p>
                 
                 <div class="clone-form">
                     <div class="form-group">
                         <label>参考音频：</label>
                         <div class="file-upload-group">
                             <label class="file-input">
-                                <span>{{ cloneReferenceFile ? cloneReferenceFile.name : '选择 WAV 文件' }}</span>
+                                <span>{{ cloneReferenceFile ? cloneReferenceFile.name : '📁 选择 WAV 文件' }}</span>
                                 <input type="file" ref="cloneReferenceInput" accept=".wav" @change="onCloneReferenceChange">
                             </label>
+                            <span class="input-separator-text">或</span>
+                            <button 
+                                class="record-button"
+                                :class="{ recording: isCloneRecording, 'has-recording': hasCloneRecording }"
+                                @click="toggleCloneRecording"
+                                :disabled="isCloning"
+                                type="button"
+                            >
+                                <span class="record-icon">{{ isCloneRecording ? '⏹' : (hasCloneRecording ? '✓ 🎤' : '🎤') }}</span>
+                                <span class="record-text">{{ isCloneRecording ? '停止录音' : (hasCloneRecording ? '已录制' : '麦克风录音') }}</span>
+                            </button>
+                        </div>
+                        <div v-if="cloneRecordingError" class="recording-error">
+                            ⚠️ {{ cloneRecordingError }}
                         </div>
                     </div>
 
@@ -204,7 +241,7 @@
                     <button 
                         class="primary-button" 
                         @click="handleClone" 
-                        :disabled="isCloning || !cloneReferenceFile || !cloneText.trim()"
+                        :disabled="isCloning || (!cloneReferenceFile && !cloneRecordedBlob) || !cloneText.trim()"
                     >
                         {{ isCloning ? '合成中…' : '开始合成' }}
                     </button>
@@ -403,6 +440,178 @@
                     >
                         {{ isChatting ? '处理中…' : '发送' }}
                     </button>
+                </div>
+            </section>
+        </main>
+
+        <main class="main-grid lock-grid" v-show="activeTab === 'lock'">
+            <section class="card lock-settings-card">
+                <h2>🔐 智能门锁设置</h2>
+                <p class="hint">设置门锁的主人和密码，使用语音进行身份验证</p>
+                
+                <div class="clone-form">
+                    <div class="form-group">
+                        <label>选择主人：</label>
+                        <select v-model="lockOwner" class="clone-select">
+                            <option value="">-- 请选择主人 --</option>
+                            <option v-for="owner in availableOwners" :key="owner" :value="owner">
+                                {{ owner }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>设置密码（数字）：</label>
+                        <input 
+                            v-model="lockPasscode" 
+                            type="text" 
+                            class="text-input"
+                            placeholder="例如: 3503"
+                            pattern="[0-9]*"
+                            maxlength="10"
+                        />
+                        <small class="hint">仅支持数字，建议4位</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>预期数字个数：</label>
+                        <input 
+                            v-model.number="lockDigits" 
+                            type="number" 
+                            class="text-input"
+                            min="1"
+                            max="10"
+                            placeholder="4"
+                        />
+                    </div>
+
+                    <div class="lock-status-display" v-if="lockOwner && lockPasscode">
+                        <div class="status-icon">🔒</div>
+                        <div class="status-text">
+                            <strong>当前设置</strong>
+                            <p>主人: {{ lockOwner }} | 密码: {{ lockPasscode }}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card lock-verify-card">
+                <h2>🎤 语音验证</h2>
+                <p class="hint">录制或上传语音进行身份验证和密码识别</p>
+                
+                <div class="lock-input-area">
+                    <div class="lock-input-methods">
+                        <div class="input-method-block">
+                            <label class="file-input">
+                                <span>{{ lockAudioFile ? '✓ ' + lockAudioFile.name : '📁 上传音频' }}</span>
+                                <input type="file" ref="lockAudioInput" accept=".wav" @change="onLockAudioChange">
+                            </label>
+                        </div>
+                        <div class="input-separator-text">或</div>
+                        <div class="input-method-block">
+                            <button 
+                                class="record-button"
+                                :class="{ recording: isLockRecording, 'has-recording': hasLockRecording }"
+                                @click="toggleLockRecording"
+                                :disabled="isVerifying"
+                            >
+                                <span class="record-icon">{{ isLockRecording ? '⏹' : (hasLockRecording ? '✓ 🎤' : '🎤') }}</span>
+                                <span class="record-text">{{ isLockRecording ? '停止录音' : (hasLockRecording ? '已录制' : '麦克风录音') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="lockRecordingError" class="recording-error">
+                        ⚠️ {{ lockRecordingError }}
+                    </div>
+                    <button 
+                        class="primary-button verify-button" 
+                        @click="verifyLock" 
+                        :disabled="isVerifying || !lockOwner || !lockPasscode || (!lockAudioFile && !lockRecordedBlob)"
+                    >
+                        {{ isVerifying ? '验证中…' : '🔓 验证开锁' }}
+                    </button>
+                </div>
+
+                <div v-if="lockResult" class="lock-result-display" :class="{ success: lockResult.unlock, failed: !lockResult.unlock }">
+                    <div class="result-header">
+                        <span class="result-icon">{{ lockResult.unlock ? '✅' : '❌' }}</span>
+                        <h3>{{ lockResult.unlock ? '开锁成功！' : '开锁失败' }}</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-item">
+                            <strong>识别说话人:</strong> 
+                            <span :class="{ match: lockResult.speaker_match, mismatch: !lockResult.speaker_match }">
+                                {{ lockResult.recognized_speaker }} 
+                                (置信度: {{ (lockResult.speaker_confidence * 100).toFixed(2) }}%)
+                            </span>
+                        </div>
+                        <div class="result-item">
+                            <strong>识别密码:</strong> 
+                            <span :class="{ match: lockResult.passcode_match, mismatch: !lockResult.passcode_match }">
+                                {{ lockResult.recognized_digits }}
+                            </span>
+                        </div>
+                        <div class="result-message">
+                            {{ lockResult.tts_text }}
+                        </div>
+                        
+                        <!-- 详细信息折叠 -->
+                        <button class="details-toggle" @click="lockDetailsExpanded = !lockDetailsExpanded">
+                            {{ lockDetailsExpanded ? '收起详情' : '查看详情' }}
+                        </button>
+                        
+                        <div v-show="lockDetailsExpanded" class="lock-details">
+                            <h4>说话人Top3:</h4>
+                            <ul class="lock-detail-list">
+                                <li v-for="(spk, idx) in lockResult.speaker_top3" :key="idx">
+                                    {{ idx + 1 }}. {{ spk.name }}: {{ (spk.probability * 100).toFixed(2) }}%
+                                </li>
+                            </ul>
+                            
+                            <h4>各位数字识别:</h4>
+                            <div class="digit-segments">
+                                <div v-for="seg in lockResult.digits_per_segment" :key="seg.position" class="segment-item">
+                                    <strong>位置 {{ seg.position }}:</strong> {{ seg.recognized }} ({{ (seg.confidence * 100).toFixed(2) }}%)
+                                    <ul class="segment-top3">
+                                        <li v-for="(d, idx) in seg.top3" :key="idx">
+                                            {{ d.digit }}: {{ (d.probability * 100).toFixed(2) }}%
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card output-card">
+                <div class="output-header">
+                    <h2>验证日志</h2>
+                    <div class="output-actions">
+                        <button class="link-button" type="button" @click="lockLogExpanded = !lockLogExpanded">
+                            {{ lockLogExpanded ? '收起' : '展开' }}
+                        </button>
+                        <button class="link-button" type="button" @click="lockMessages = []" :disabled="lockMessages.length === 0">清空</button>
+                    </div>
+                </div>
+                <div v-show="lockLogExpanded">
+                    <p v-if="lockMessages.length === 0" class="placeholder">暂无验证记录</p>
+                    <ul v-else class="message-list">
+                        <li
+                            v-for="(message, index) in lockMessages"
+                            :key="index"
+                            :class="[
+                                'message-item',
+                                {
+                                    'message-success': message.includes('成功') || message.includes('✅'),
+                                    'message-error': message.includes('失败') || message.includes('❌')
+                                }
+                            ]"
+                        >
+                            <span class="message-index">{{ index + 1 }}</span>
+                            <span class="message-text">{{ message }}</span>
+                        </li>
+                    </ul>
                 </div>
             </section>
         </main>

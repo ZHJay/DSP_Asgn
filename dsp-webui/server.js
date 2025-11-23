@@ -195,6 +195,53 @@ app.post('/chat/tts', upload.single('referenceAudio'), async (req, res) => {
     }
 });
 
+// 智能锁验证接口
+app.post('/smart-lock/verify', upload.single('audio'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: '未收到音频文件' });
+    }
+
+    const { owner, passcode, digits = 4 } = req.body;
+    if (!owner || !passcode) {
+        return res.status(400).json({ message: '缺少主人或密码参数' });
+    }
+
+    try {
+        const audioPath = req.file.path;
+        const result = await runSmartLock(audioPath, owner, passcode, digits);
+        
+        res.json(result);
+    } catch (error) {
+        console.error('智能锁验证失败:', error);
+        res.status(500).json({ 
+            message: '智能锁验证失败，请稍后重试。', 
+            error: error.message,
+            unlock: false
+        });
+    }
+});
+
+// 获取可用的主人列表
+app.get('/smart-lock/owners', async (req, res) => {
+    try {
+        const metricsPath = path.join(__dirname, '..', 'frequencydomain', 'outputs', 'metrics.json');
+        const metricsData = JSON.parse(fs.readFileSync(metricsPath, 'utf-8'));
+        const owners = metricsData.label_maps.speaker;
+        
+        res.json({
+            owners: Object.values(owners),
+            success: true
+        });
+    } catch (error) {
+        console.error('获取主人列表失败:', error);
+        res.status(500).json({ 
+            message: '获取主人列表失败', 
+            error: error.message,
+            owners: []
+        });
+    }
+});
+
 // 声音克隆接口
 app.post('/voice-clone', upload.single('referenceAudio'), async (req, res) => {
     if (!req.file) {
@@ -313,6 +360,57 @@ function runTimeDomainAnalysis(targetPath) {
 
 function runSttAnalysis(targetPath) {
     return executePythonScript('stt_api.py', targetPath);
+}
+
+function runSmartLock(audioPath, owner, passcode, digits) {
+    return new Promise((resolve, reject) => {
+        const pythonExecutable = process.env.PYTHON_PATH || 'python';
+        const scriptPath = path.join(__dirname, 'lock_api.py');
+
+        const child = spawn(pythonExecutable, [
+            scriptPath,
+            '--audio', audioPath,
+            '--owner', owner,
+            '--passcode', passcode,
+            '--digits', digits.toString()
+        ], {
+            cwd: __dirname,
+            windowsHide: true
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => {
+            reject(error);
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error(stderr || `智能锁验证脚本以状态码 ${code} 退出`));
+            }
+
+            try {
+                const trimmed = stdout.trim();
+                if (!trimmed) {
+                    return reject(new Error('智能锁验证脚本未返回任何输出'));
+                }
+
+                const parsed = JSON.parse(trimmed);
+                resolve(parsed);
+            } catch (parseError) {
+                reject(new Error(`解析智能锁验证输出失败: ${parseError.message}`));
+            }
+        });
+    });
 }
 
 function runChatSTT(audioPath, language) {
