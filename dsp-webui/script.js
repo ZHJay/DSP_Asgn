@@ -29,6 +29,16 @@ createApp({
             chatAudioFile: null,
             chatTextInput: '',
             isChatting: false,
+            // 处理步骤状态
+            chatProcessingStep: null, // 'stt', 'llm', 'tts', 'done'
+            chatProcessingMessage: '',
+            // 录音相关
+            isRecording: false,
+            hasRecording: false,
+            chatRecordedBlob: null,
+            mediaRecorder: null,
+            audioChunks: [],
+            recordingError: null,
             chartState: {
                 time: {
                     key: 'time',
@@ -569,9 +579,159 @@ createApp({
             this.chatMessages = [{ role: 'system', content: this.chatSystemPrompt }];
             this.chatAudioFile = null;
             this.chatTextInput = '';
+            this.chatRecordedBlob = null;
+            this.hasRecording = false;
+            this.recordingError = null;
             if (this.$refs.chatAudioInput) {
                 this.$refs.chatAudioInput.value = '';
             }
+        },
+        async toggleRecording() {
+            if (this.isRecording) {
+                // 停止录音
+                this.stopRecording();
+            } else {
+                // 开始录音
+                await this.startRecording();
+            }
+        },
+        async startRecording() {
+            try {
+                this.recordingError = null;
+                
+                // 请求麦克风权限
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                // 创建MediaRecorder
+                const options = { mimeType: 'audio/webm' };
+                this.mediaRecorder = new MediaRecorder(stream, options);
+                this.audioChunks = [];
+                
+                this.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.audioChunks.push(event.data);
+                    }
+                };
+                
+                this.mediaRecorder.onstop = async () => {
+                    // 合并音频数据
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    
+                    // 转换为WAV格式
+                    try {
+                        const wavBlob = await this.convertToWav(audioBlob);
+                        this.chatRecordedBlob = wavBlob;
+                        this.hasRecording = true;
+                        this.chatAudioFile = null; // 清除文件上传
+                        if (this.$refs.chatAudioInput) {
+                            this.$refs.chatAudioInput.value = '';
+                        }
+                    } catch (error) {
+                        console.error('音频转换失败:', error);
+                        this.recordingError = '音频转换失败，请重试';
+                        this.hasRecording = false;
+                    }
+                    
+                    // 停止所有轨道
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                
+            } catch (error) {
+                console.error('麦克风访问失败:', error);
+                if (error.name === 'NotAllowedError') {
+                    this.recordingError = '麦克风权限被拒绝，请在浏览器设置中允许访问麦克风';
+                } else if (error.name === 'NotFoundError') {
+                    this.recordingError = '未找到麦克风设备';
+                } else {
+                    this.recordingError = `麦克风访问失败: ${error.message}`;
+                }
+            }
+        },
+        stopRecording() {
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.mediaRecorder.stop();
+                this.isRecording = false;
+            }
+        },
+        async convertToWav(webmBlob) {
+            // 使用Web Audio API将WebM转换为WAV
+            const arrayBuffer = await webmBlob.arrayBuffer();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            // 转换为WAV格式
+            const wavBuffer = this.audioBufferToWav(audioBuffer);
+            return new Blob([wavBuffer], { type: 'audio/wav' });
+        },
+        audioBufferToWav(audioBuffer) {
+            const numChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const length = audioBuffer.length * numChannels * 2;
+            const buffer = new ArrayBuffer(44 + length);
+            const view = new DataView(buffer);
+            
+            // WAV文件头
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length, true);
+            
+            // 写入音频数据
+            const offset = 44;
+            const channels = [];
+            for (let i = 0; i < numChannels; i++) {
+                channels.push(audioBuffer.getChannelData(i));
+            }
+            
+            let index = offset;
+            for (let i = 0; i < audioBuffer.length; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, channels[channel][i]));
+                    view.setInt16(index, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    index += 2;
+                }
+            }
+            
+            return buffer;
+        },
+        removeThinkTags(text) {
+            // 移除<think>...</think>标签及其内容（支持多个think标签）
+            // 使用全局匹配和非贪婪模式，支持换行符
+            let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+            
+            // 移除可能残留的单独标签
+            cleaned = cleaned.replace(/<\/?think>/gi, '');
+            
+            // 清理多余的空白字符
+            cleaned = cleaned.trim();
+            
+            // 如果清理后内容为空，返回默认提示
+            return cleaned || '[AI正在思考中]';
         },
         async sendChatMessage() {
             if (!this.chatReferenceFile) {
@@ -579,20 +739,26 @@ createApp({
                 return;
             }
 
-            if (!this.chatAudioFile && !this.chatTextInput.trim()) {
-                alert('请上传音频或输入文本！');
+            if (!this.chatAudioFile && !this.chatRecordedBlob && !this.chatTextInput.trim()) {
+                alert('请上传音频、录制音频或输入文本！');
                 return;
             }
 
             this.isChatting = true;
+            this.chatProcessingStep = null;
+            this.chatProcessingMessage = '';
             
             try {
                 let userText = '';
 
-                // 1. 如果有音频文件，先进行STT
-                if (this.chatAudioFile) {
+                // 1. 如果有音频文件或录音，先进行STT
+                const audioToTranscribe = this.chatAudioFile || this.chatRecordedBlob;
+                if (audioToTranscribe) {
+                    this.chatProcessingStep = 'stt';
+                    this.chatProcessingMessage = '正在识别语音内容...';
+                    
                     const sttFormData = new FormData();
-                    sttFormData.append('audio', this.chatAudioFile);
+                    sttFormData.append('audio', audioToTranscribe, 'recording.wav');
                     sttFormData.append('language', this.chatLanguage);
 
                     const sttResponse = await fetch('/chat/stt', {
@@ -607,6 +773,7 @@ createApp({
 
                     const sttResult = await sttResponse.json();
                     userText = sttResult.text || '[未识别]';
+                    this.chatProcessingMessage = `✓ 识别完成: ${userText.substring(0, 20)}${userText.length > 20 ? '...' : ''}`;
                 } else {
                     userText = this.chatTextInput.trim();
                 }
@@ -627,6 +794,9 @@ createApp({
                 });
 
                 // 2. 调用LLM
+                this.chatProcessingStep = 'llm';
+                this.chatProcessingMessage = 'AI正在思考回复...';
+                
                 if (this.chatMessages.length === 0) {
                     this.chatMessages = [{ role: 'system', content: this.chatSystemPrompt }];
                 }
@@ -647,11 +817,18 @@ createApp({
                 const assistantText = llmResult.response || '[无回复]';
                 
                 this.chatMessages.push({ role: 'assistant', content: assistantText });
+                this.chatProcessingMessage = `✓ AI回复完成: ${assistantText.substring(0, 30).replace(/<think>.*?<\/think>/g, '')}${assistantText.length > 30 ? '...' : ''}`;
+
+                // 过滤掉<think>标签及其内容，只保留实际回复用于TTS
+                const textForTTS = this.removeThinkTags(assistantText);
 
                 // 3. 使用TTS合成语音
+                this.chatProcessingStep = 'tts';
+                this.chatProcessingMessage = '正在合成语音...';
+                
                 const ttsFormData = new FormData();
                 ttsFormData.append('referenceAudio', this.chatReferenceFile);
-                ttsFormData.append('text', assistantText);
+                ttsFormData.append('text', textForTTS);
                 ttsFormData.append('language', this.chatLanguage);
 
                 const ttsResponse = await fetch('/chat/tts', {
@@ -663,6 +840,7 @@ createApp({
                 if (ttsResponse.ok) {
                     const ttsResult = await ttsResponse.json();
                     audioPath = '/' + ttsResult.outputPath;
+                    this.chatProcessingMessage = '✓ 语音合成完成';
                 }
 
                 // 添加AI回复到界面
@@ -672,9 +850,15 @@ createApp({
                     audioPath: audioPath,
                     time: this.formatTimestamp()
                 });
+                
+                // 标记完成
+                this.chatProcessingStep = 'done';
+                this.chatProcessingMessage = '✓ 对话完成';
 
                 // 清空输入
                 this.chatAudioFile = null;
+                this.chatRecordedBlob = null;
+                this.hasRecording = false;
                 this.chatTextInput = '';
                 if (this.$refs.chatAudioInput) {
                     this.$refs.chatAudioInput.value = '';
@@ -690,9 +874,16 @@ createApp({
 
             } catch (error) {
                 console.error('对话处理失败:', error);
+                this.chatProcessingStep = null;
+                this.chatProcessingMessage = '';
                 alert(`对话失败: ${error.message}`);
             } finally {
                 this.isChatting = false;
+                // 延迟清除处理状态，让用户看到完成提示
+                setTimeout(() => {
+                    this.chatProcessingStep = null;
+                    this.chatProcessingMessage = '';
+                }, 2000);
             }
         }
     }

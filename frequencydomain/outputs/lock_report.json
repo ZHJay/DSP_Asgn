@@ -1,79 +1,83 @@
 {
-  "audio": "/Users/zhanghjay/Desktop/DSP_Asgn/frequencydomain/lock1.wav",
-  "expected_passcode": "3503",
-  "recognized_digits": "7331",
+  "audio": "/Users/zhanghjay/Desktop/DSP_Asgn/dsp-webui/uploads/lock_recording.wav",
+  "expected_passcode": "6378",
+  "recognized_digits": "5372",
+  "passcode_match": false,
+  "expected_owner": "zhj",
+  "recognized_speaker": "xsq",
+  "speaker_match": false,
   "unlock": false,
   "speaker_top3": [
     {
-      "name": "cqc",
-      "prob": 0.9999901056289673
+      "name": "xsq",
+      "prob": 0.9274289608001709
     },
     {
       "name": "zhj",
-      "prob": 4.792847903445363e-06
+      "prob": 0.05182136222720146
     },
     {
       "name": "bck",
-      "prob": 4.522604285739362e-06
+      "prob": 0.01991310901939869
     }
   ],
   "digits_per_segment_top3": [
     [
       {
-        "digit": "7",
-        "prob": 0.980087399482727
-      },
-      {
-        "digit": "9",
-        "prob": 0.008655296638607979
-      },
-      {
-        "digit": "4",
-        "prob": 0.0035152477212250233
-      }
-    ],
-    [
-      {
-        "digit": "3",
-        "prob": 0.44961151480674744
-      },
-      {
-        "digit": "4",
-        "prob": 0.211775541305542
-      },
-      {
-        "digit": "9",
-        "prob": 0.1815619319677353
-      }
-    ],
-    [
-      {
-        "digit": "3",
-        "prob": 0.9513199329376221
-      },
-      {
-        "digit": "9",
-        "prob": 0.014893066138029099
-      },
-      {
-        "digit": "7",
-        "prob": 0.011396253481507301
-      }
-    ],
-    [
-      {
-        "digit": "1",
-        "prob": 0.7498816251754761
-      },
-      {
         "digit": "5",
-        "prob": 0.16908381879329681
+        "prob": 0.5184324383735657
+      },
+      {
+        "digit": "4",
+        "prob": 0.26823437213897705
+      },
+      {
+        "digit": "6",
+        "prob": 0.07058540731668472
+      }
+    ],
+    [
+      {
+        "digit": "3",
+        "prob": 0.9560049772262573
+      },
+      {
+        "digit": "2",
+        "prob": 0.032308951020240784
+      },
+      {
+        "digit": "6",
+        "prob": 0.0056424252688884735
+      }
+    ],
+    [
+      {
+        "digit": "7",
+        "prob": 0.9844808578491211
+      },
+      {
+        "digit": "9",
+        "prob": 0.0153279360383749
+      },
+      {
+        "digit": "4",
+        "prob": 0.0001092604361474514
+      }
+    ],
+    [
+      {
+        "digit": "2",
+        "prob": 0.6381540894508362
       },
       {
         "digit": "8",
-        "prob": 0.04066556692123413
+        "prob": 0.36003172397613525
+      },
+      {
+        "digit": "3",
+        "prob": 0.0007734824321232736
       }
     ]
   ],
-  "tts_text": "身份验证失败，拒绝开锁,家里不欢迎你哦。"
+  "tts_text": "密码错误且身份不匹配，拒绝开锁。"
 }

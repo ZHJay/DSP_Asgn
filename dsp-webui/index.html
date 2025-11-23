@@ -296,6 +296,45 @@
             <section class="card chat-conversation-card">
                 <h2>对话窗口</h2>
                 
+                <!-- 处理步骤状态 -->
+                <div v-if="chatProcessingStep" class="chat-processing-status">
+                    <div class="processing-steps">
+                        <div 
+                            class="step-item"
+                            :class="{
+                                'active': chatProcessingStep === 'stt',
+                                'completed': ['llm', 'tts', 'done'].includes(chatProcessingStep)
+                            }"
+                        >
+                            <span class="step-icon">🎤</span>
+                            <span class="step-text">语音识别</span>
+                        </div>
+                        <div class="step-arrow">→</div>
+                        <div 
+                            class="step-item"
+                            :class="{
+                                'active': chatProcessingStep === 'llm',
+                                'completed': ['tts', 'done'].includes(chatProcessingStep)
+                            }"
+                        >
+                            <span class="step-icon">🤖</span>
+                            <span class="step-text">AI思考</span>
+                        </div>
+                        <div class="step-arrow">→</div>
+                        <div 
+                            class="step-item"
+                            :class="{
+                                'active': chatProcessingStep === 'tts',
+                                'completed': chatProcessingStep === 'done'
+                            }"
+                        >
+                            <span class="step-icon">🔊</span>
+                            <span class="step-text">语音合成</span>
+                        </div>
+                    </div>
+                    <div class="processing-message">{{ chatProcessingMessage }}</div>
+                </div>
+                
                 <div class="chat-history" ref="chatHistory">
                     <div v-if="chatHistory.length === 0" class="chat-placeholder">
                         <p>👋 上传参考音色后，开始对话吧！</p>
@@ -332,6 +371,19 @@
                         </div>
                         <span class="input-separator">或</span>
                         <div class="input-method">
+                            <button 
+                                class="record-button"
+                                :class="{ recording: isRecording, 'has-recording': hasRecording }"
+                                @click="toggleRecording"
+                                :disabled="isChatting"
+                                :title="isRecording ? '点击停止录音' : (hasRecording ? '点击重新录音' : '点击开始录音')"
+                            >
+                                <span class="record-icon">{{ isRecording ? '⏹' : (hasRecording ? '✓ 🎤' : '🎤') }}</span>
+                                <span class="record-text">{{ isRecording ? '停止录音' : (hasRecording ? '已录制' : '麦克风录音') }}</span>
+                            </button>
+                        </div>
+                        <span class="input-separator">或</span>
+                        <div class="input-method">
                             <input 
                                 v-model="chatTextInput" 
                                 type="text" 
@@ -341,10 +393,13 @@
                             />
                         </div>
                     </div>
+                    <div v-if="recordingError" class="recording-error">
+                        ⚠️ {{ recordingError }}
+                    </div>
                     <button 
                         class="primary-button send-button" 
                         @click="sendChatMessage" 
-                        :disabled="isChatting || !chatReferenceFile || (!chatAudioFile && !chatTextInput.trim())"
+                        :disabled="isChatting || !chatReferenceFile || (!chatAudioFile && !chatRecordedBlob && !chatTextInput.trim())"
                     >
                         {{ isChatting ? '处理中…' : '发送' }}
                     </button>
