@@ -10,6 +10,9 @@ import sys
 import time
 from pathlib import Path
 
+# Set Hugging Face mirror for China access
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import requests
 import whisper
 import torch

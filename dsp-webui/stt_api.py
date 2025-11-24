@@ -5,6 +5,9 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
+# Set Hugging Face mirror for China access
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import torch
 import torch.nn.functional as F
 import torchaudio
