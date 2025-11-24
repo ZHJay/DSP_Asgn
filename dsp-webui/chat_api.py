@@ -87,9 +87,38 @@ def synthesize_speech(text: str, reference_audio: str, output_path: str, languag
     tts.synthesize(text, reference_audio, output_path, language)
 
 
+def preload_models():
+    """预加载所有模型到内存，避免首次请求时的加载延迟"""
+    print("="*60)
+    print("开始预加载模型...")
+    print("="*60)
+    
+    start_time = time.time()
+    
+    # 预加载 Whisper 模型
+    print("\n[1/2] 加载 Whisper STT 模型...")
+    whisper_start = time.time()
+    get_whisper_model()
+    whisper_time = time.time() - whisper_start
+    print(f"✅ Whisper 模型加载完成 ({whisper_time:.2f}秒)")
+    
+    # 预加载 TTS 模型
+    print("\n[2/2] 加载 XTTS TTS 模型...")
+    tts_start = time.time()
+    get_tts_system()
+    tts_time = time.time() - tts_start
+    print(f"✅ XTTS 模型加载完成 ({tts_time:.2f}秒)")
+    
+    total_time = time.time() - start_time
+    print("\n" + "="*60)
+    print(f"✅ 所有模型预加载完成！总耗时: {total_time:.2f}秒")
+    print("="*60)
+    return {"success": True, "load_time": total_time}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Chat API for digital human")
-    parser.add_argument("--mode", required=True, choices=["stt", "llm", "tts", "full"], help="操作模式")
+    parser.add_argument("--mode", required=True, choices=["stt", "llm", "tts", "full", "preload"], help="操作模式")
     parser.add_argument("--audio", help="音频文件路径（STT模式）")
     parser.add_argument("--messages", help="消息历史（JSON格式，LLM模式）")
     parser.add_argument("--text", help="要合成的文本（TTS模式）")
@@ -100,7 +129,12 @@ def main():
     args = parser.parse_args()
     
     try:
-        if args.mode == "stt":
+        if args.mode == "preload":
+            # 预加载所有模型
+            result = preload_models()
+            print(json.dumps(result))
+            
+        elif args.mode == "stt":
             # 语音转文字
             if not args.audio:
                 raise ValueError("STT模式需要 --audio 参数")

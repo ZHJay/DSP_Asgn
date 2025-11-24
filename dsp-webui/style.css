@@ -780,6 +780,51 @@ body {
     max-width: 300px;
 }
 
+/* Think标签样式 */
+.message-main-content {
+    margin-bottom: 8px;
+}
+
+.think-toggle {
+    background: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    padding: 6px 12px;
+    margin: 8px 0;
+    cursor: pointer;
+    font-size: 13px;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.think-toggle:hover {
+    background: #e0e0e0;
+    border-color: #b0b0b0;
+    color: #333;
+}
+
+.think-content {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f8f8;
+    border-left: 3px solid #ffa500;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.think-header {
+    font-weight: 600;
+    color: #ff8c00;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.think-text {
+    color: #555;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
 .chat-input-area {
     display: flex;
     gap: 12px;

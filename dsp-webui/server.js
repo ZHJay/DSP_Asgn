@@ -297,8 +297,22 @@ async function 频域(inputPath) {
     return runSttAnalysis(inputPath);
 }
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`Server is running at http://localhost:${PORT}`);
+    
+    // 检查 chat_service 是否就绪
+    console.log('\n正在检查 Chat Service 状态...');
+    console.log('提示: 请确保已在另一个终端运行: python chat_service.py\n');
+    
+    try {
+        const result = await preloadChatModels();
+        console.log('✅ ' + result.message);
+        console.log('✅ 服务已完全就绪！\n');
+    } catch (error) {
+        console.error('⚠️  Chat Service 未启动:', error.message);
+        console.error('⚠️  请在另一个终端运行: python chat_service.py');
+        console.error('⚠️  对话功能将不可用\n');
+    }
 });
 
 let cleanedUp = false;
@@ -414,190 +428,119 @@ function runSmartLock(audioPath, owner, passcode, digits) {
 }
 
 function runChatSTT(audioPath, language) {
-    return new Promise((resolve, reject) => {
-        const pythonExecutable = process.env.PYTHON_PATH || 'python';
-        const scriptPath = path.join(__dirname, 'chat_api.py');
+    return new Promise(async (resolve, reject) => {
+        try {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('audio', fs.createReadStream(audioPath));
+            form.append('language', language);
 
-        const child = spawn(pythonExecutable, [
-            scriptPath,
-            '--mode', 'stt',
-            '--audio', audioPath,
-            '--language', language
-        ], {
-            cwd: __dirname,
-            windowsHide: true
-        });
+            const fetch = (await import('node-fetch')).default;
+            const response = await fetch('http://localhost:5001/stt', {
+                method: 'POST',
+                body: form,
+                headers: form.getHeaders()
+            });
 
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', (chunk) => {
-            stdout += chunk.toString();
-        });
-
-        child.stderr.on('data', (chunk) => {
-            stderr += chunk.toString();
-        });
-
-        child.on('error', (error) => {
-            reject(error);
-        });
-
-        child.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(stderr || `STT 脚本以状态码 ${code} 退出`));
+            const result = await response.json();
+            
+            if (!response.ok) {
+                return reject(new Error(result.error || 'STT 请求失败'));
             }
-
-            try {
-                // 只解析最后一行的 JSON，忽略其他输出
-                const lines = stdout.trim().split('\n');
-                const jsonLine = lines[lines.length - 1];
-                const parsed = JSON.parse(jsonLine);
-                resolve(parsed);
-            } catch (parseError) {
-                reject(new Error(`解析 STT 输出失败: ${parseError.message}`));
-            }
-        });
+            
+            resolve(result);
+        } catch (error) {
+            reject(new Error(`STT 服务调用失败: ${error.message}`));
+        }
     });
 }
 
 function runChatLLM(messages) {
-    const messagesJson = JSON.stringify(messages);
-    return new Promise((resolve, reject) => {
-        const pythonExecutable = process.env.PYTHON_PATH || 'python';
-        const scriptPath = path.join(__dirname, 'chat_api.py');
+    return new Promise(async (resolve, reject) => {
+        try {
+            const fetch = (await import('node-fetch')).default;
+            const response = await fetch('http://localhost:5001/llm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages })
+            });
 
-        const child = spawn(pythonExecutable, [
-            scriptPath,
-            '--mode', 'llm',
-            '--messages', messagesJson
-        ], {
-            cwd: __dirname,
-            windowsHide: true
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', (chunk) => {
-            stdout += chunk.toString();
-        });
-
-        child.stderr.on('data', (chunk) => {
-            stderr += chunk.toString();
-        });
-
-        child.on('error', (error) => {
-            reject(error);
-        });
-
-        child.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(stderr || `LLM 脚本以状态码 ${code} 退出`));
+            const result = await response.json();
+            
+            if (!response.ok) {
+                return reject(new Error(result.error || 'LLM 请求失败'));
             }
-
-            try {
-                // 只解析最后一行的 JSON，忽略其他输出
-                const lines = stdout.trim().split('\n');
-                const jsonLine = lines[lines.length - 1];
-                const parsed = JSON.parse(jsonLine);
-                resolve(parsed);
-            } catch (parseError) {
-                reject(new Error(`解析 LLM 输出失败: ${parseError.message}`));
-            }
-        });
+            
+            resolve(result);
+        } catch (error) {
+            reject(new Error(`LLM 服务调用失败: ${error.message}`));
+        }
     });
 }
 
 function runChatTTS(text, referenceAudioPath, outputPath, language) {
-    return new Promise((resolve, reject) => {
-        const pythonExecutable = process.env.PYTHON_PATH || 'python';
-        const scriptPath = path.join(__dirname, 'chat_api.py');
+    return new Promise(async (resolve, reject) => {
+        try {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('reference', fs.createReadStream(referenceAudioPath));
+            form.append('text', text);
+            form.append('output', outputPath);
+            form.append('language', language);
 
-        const child = spawn(pythonExecutable, [
-            scriptPath,
-            '--mode', 'tts',
-            '--text', text,
-            '--reference', referenceAudioPath,
-            '--output', outputPath,
-            '--language', language
-        ], {
-            cwd: __dirname,
-            windowsHide: true
-        });
+            const fetch = (await import('node-fetch')).default;
+            const response = await fetch('http://localhost:5001/tts', {
+                method: 'POST',
+                body: form,
+                headers: form.getHeaders()
+            });
 
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', (chunk) => {
-            stdout += chunk.toString();
-        });
-
-        child.stderr.on('data', (chunk) => {
-            stderr += chunk.toString();
-        });
-
-        child.on('error', (error) => {
-            reject(error);
-        });
-
-        child.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(stderr || `TTS 脚本以状态码 ${code} 退出`));
+            const result = await response.json();
+            
+            if (!response.ok) {
+                return reject(new Error(result.error || 'TTS 请求失败'));
             }
-
-            try {
-                // 只解析最后一行的 JSON，忽略其他输出
-                const lines = stdout.trim().split('\n');
-                const jsonLine = lines[lines.length - 1];
-                const parsed = JSON.parse(jsonLine);
-                resolve(parsed);
-            } catch (parseError) {
-                reject(new Error(`解析 TTS 输出失败: ${parseError.message}`));
-            }
-        });
+            
+            resolve(result);
+        } catch (error) {
+            reject(new Error(`TTS 服务调用失败: ${error.message}`));
+        }
     });
 }
 
-function runVoiceClone(referenceAudioPath, text, outputPath, language) {
-    return new Promise((resolve, reject) => {
-        const pythonExecutable = process.env.PYTHON_PATH || 'python';
-        const scriptPath = path.join(__dirname, 'tts_api.py');
-
-        const child = spawn(pythonExecutable, [
-            scriptPath,
-            '--reference', referenceAudioPath,
-            '--text', text,
-            '--output', outputPath,
-            '--language', language
-        ], {
-            cwd: __dirname,
-            windowsHide: true
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', (chunk) => {
-            stdout += chunk.toString();
-        });
-
-        child.stderr.on('data', (chunk) => {
-            stderr += chunk.toString();
-        });
-
-        child.on('error', (error) => {
-            reject(error);
-        });
-
-        child.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(stderr || `TTS 脚本以状态码 ${code} 退出`));
+async function preloadChatModels() {
+    // 检查 chat_service 是否已启动
+    const maxRetries = 30; // 最多等待30秒
+    let retries = 0;
+    
+    while (retries < maxRetries) {
+        try {
+            const fetch = (await import('node-fetch')).default;
+            const response = await fetch('http://localhost:5001/health', {
+                method: 'GET',
+                timeout: 2000
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.models_loaded) {
+                    return { success: true, message: 'Chat service 已就绪，模型已加载' };
+                }
             }
+        } catch (error) {
+            // 服务还未启动，继续等待
+        }
+        
+        retries++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    throw new Error('Chat service 未响应，请确保已启动 chat_service.py');
+}
 
-            resolve({ success: true, stdout });
-        });
-    });
+function runVoiceClone(referenceAudioPath, text, outputPath, language) {
+    // 使用与 chat TTS 相同的常驻服务
+    return runChatTTS(text, referenceAudioPath, outputPath, language);
 }
 
 function executePythonScript(scriptName, targetPath) {

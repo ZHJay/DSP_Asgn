@@ -39,13 +39,10 @@ createApp({
             mediaRecorder: null,
             audioChunks: [],
             recordingError: null,
-            // Recognition tab recording
-            isRecognitionRecording: false,
-            hasRecognitionRecording: false,
-            recognitionRecordedBlob: null,
-            recognitionMediaRecorder: null,
-            recognitionAudioChunks: [],
-            recognitionRecordingError: null,
+                // Recorder helpers (used by clone only)
+                recorderStream: null,
+                recorder: null,
+                recorderChunks: [],
             // Clone tab recording
             isCloneRecording: false,
             hasCloneRecording: false,
@@ -59,12 +56,10 @@ createApp({
             lockPasscode: '',
             lockDigits: 4,
             lockAudioFile: null,
-            isLockRecording: false,
-            hasLockRecording: false,
-            lockRecordedBlob: null,
-            lockMediaRecorder: null,
-            lockAudioChunks: [],
-            lockRecordingError: null,
+                // Recorder helpers (used by clone only)
+                recorderStream: null,
+                recorder: null,
+                recorderChunks: [],
             isVerifying: false,
             lockResult: null,
             lockMessages: [],
@@ -122,9 +117,7 @@ createApp({
             if (file) {
                 this.lastProcessedFile = null;
                 this.resetAllConfidenceTemplates();
-                // 清除录音
-                this.recognitionRecordedBlob = null;
-                this.hasRecognitionRecording = false;
+                // 清除之前的处理状态
             }
         },
         appendMessage(message) {
@@ -153,9 +146,9 @@ createApp({
             this.selectedFile = null;
         },
         async handleUpload() {
-            const fileToUpload = this.selectedFile || this.recognitionRecordedBlob;
+            const fileToUpload = this.selectedFile;
             if (!fileToUpload) {
-                alert('请上传或录制一个 WAV 文件！');
+                alert('请上传一个 WAV 文件！');
                 return;
             }
 
@@ -200,9 +193,6 @@ createApp({
             } finally {
                 this.isUploading = false;
                 this.resetFileInput();
-                // 清除录音
-                this.recognitionRecordedBlob = null;
-                this.hasRecognitionRecording = false;
             }
         },
         async requestDomain(endpoint, label, domainKey) {
@@ -900,7 +890,8 @@ createApp({
                     role: 'assistant',
                     content: assistantText,
                     audioPath: audioPath,
-                    time: this.formatTimestamp()
+                    time: this.formatTimestamp(),
+                    showThink: false // 默认折叠think标签内容
                 });
                 
                 // 标记完成
@@ -955,80 +946,11 @@ createApp({
             const [file] = event.target.files || [];
             this.lockAudioFile = file || null;
             if (file) {
-                this.lockRecordedBlob = null;
-                this.hasLockRecording = false;
+                // 清除之前的验证结果
+                this.lockResult = null;
             }
         },
-        async toggleLockRecording() {
-            if (this.isLockRecording) {
-                this.stopLockRecording();
-            } else {
-                await this.startLockRecording();
-            }
-        },
-        async startLockRecording() {
-            try {
-                this.lockRecordingError = null;
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        channelCount: 1,
-                        sampleRate: 16000,
-                        echoCancellation: true,
-                        noiseSuppression: true
-                    }
-                });
-                
-                const options = { mimeType: 'audio/webm' };
-                this.lockMediaRecorder = new MediaRecorder(stream, options);
-                this.lockAudioChunks = [];
-                
-                this.lockMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        this.lockAudioChunks.push(event.data);
-                    }
-                };
-                
-                this.lockMediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(this.lockAudioChunks, { type: 'audio/webm' });
-                    
-                    try {
-                        const wavBlob = await this.convertToWav(audioBlob);
-                        this.lockRecordedBlob = wavBlob;
-                        this.hasLockRecording = true;
-                        this.lockAudioFile = null;
-                        if (this.$refs.lockAudioInput) {
-                            this.$refs.lockAudioInput.value = '';
-                        }
-                    } catch (error) {
-                        console.error('音频转换失败:', error);
-                        this.lockRecordingError = '音频转换失败，请重试';
-                        this.hasLockRecording = false;
-                    }
-                    
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                
-                this.lockMediaRecorder.start();
-                this.isLockRecording = true;
-                
-            } catch (error) {
-                console.error('麦克风访问失败:', error);
-                if (error.name === 'NotAllowedError') {
-                    this.lockRecordingError = '麦克风权限被拒绝';
-                } else if (error.name === 'NotFoundError') {
-                    this.lockRecordingError = '未找到麦克风设备';
-                } else {
-                    this.lockRecordingError = `麦克风访问失败: ${error.message}`;
-                }
-            }
-        },
-        stopLockRecording() {
-            if (this.lockMediaRecorder && this.lockMediaRecorder.state !== 'inactive') {
-                this.lockMediaRecorder.stop();
-                this.isLockRecording = false;
-            }
-        },
+        // lock recording removed per user request
         appendLockMessage(message) {
             this.lockMessages.push(message);
         },
@@ -1038,9 +960,9 @@ createApp({
                 return;
             }
             
-            const audioToVerify = this.lockAudioFile || this.lockRecordedBlob;
+            const audioToVerify = this.lockAudioFile;
             if (!audioToVerify) {
-                alert('请上传音频或录制音频！');
+                alert('请上传音频文件以进行验证！');
                 return;
             }
             
@@ -1090,76 +1012,7 @@ createApp({
             }
         },
         // ====== Recognition Recording Methods ======
-        async toggleRecognitionRecording() {
-            if (this.isRecognitionRecording) {
-                this.stopRecognitionRecording();
-            } else {
-                await this.startRecognitionRecording();
-            }
-        },
-        async startRecognitionRecording() {
-            try {
-                this.recognitionRecordingError = null;
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        channelCount: 1,
-                        sampleRate: 16000,
-                        echoCancellation: true,
-                        noiseSuppression: true
-                    }
-                });
-                
-                const options = { mimeType: 'audio/webm' };
-                this.recognitionMediaRecorder = new MediaRecorder(stream, options);
-                this.recognitionAudioChunks = [];
-                
-                this.recognitionMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        this.recognitionAudioChunks.push(event.data);
-                    }
-                };
-                
-                this.recognitionMediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(this.recognitionAudioChunks, { type: 'audio/webm' });
-                    
-                    try {
-                        const wavBlob = await this.convertToWav(audioBlob);
-                        this.recognitionRecordedBlob = wavBlob;
-                        this.hasRecognitionRecording = true;
-                        this.selectedFile = null;
-                        if (this.$refs.fileInput) {
-                            this.$refs.fileInput.value = '';
-                        }
-                    } catch (error) {
-                        console.error('音频转换失败:', error);
-                        this.recognitionRecordingError = '音频转换失败，请重试';
-                        this.hasRecognitionRecording = false;
-                    }
-                    
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                
-                this.recognitionMediaRecorder.start();
-                this.isRecognitionRecording = true;
-                
-            } catch (error) {
-                console.error('麦克风访问失败:', error);
-                if (error.name === 'NotAllowedError') {
-                    this.recognitionRecordingError = '麦克风权限被拒绝';
-                } else if (error.name === 'NotFoundError') {
-                    this.recognitionRecordingError = '未找到麦克风设备';
-                } else {
-                    this.recognitionRecordingError = `麦克风访问失败: ${error.message}`;
-                }
-            }
-        },
-        stopRecognitionRecording() {
-            if (this.recognitionMediaRecorder && this.recognitionMediaRecorder.state !== 'inactive') {
-                this.recognitionMediaRecorder.stop();
-                this.isRecognitionRecording = false;
-            }
-        },
+        // recognition recording removed per user request
         // ====== Clone Recording Methods ======
         async toggleCloneRecording() {
             if (this.isCloneRecording) {
@@ -1230,6 +1083,18 @@ createApp({
                 this.cloneMediaRecorder.stop();
                 this.isCloneRecording = false;
             }
+        },
+        // ====== Think Tag Parsing Methods ======
+        hasThinkTag(text) {
+            return /<think>/i.test(text);
+        },
+        extractThinkContent(text) {
+            const match = text.match(/<think>([\s\S]*?)<\/think>/i);
+            return match ? match[1].trim() : '';
+        },
+        extractMainContent(text) {
+            // 移除<think>...</think>标签及其内容，返回剩余文本
+            return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         }
     }
 }).mount('#app');

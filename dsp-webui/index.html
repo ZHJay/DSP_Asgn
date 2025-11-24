@@ -9,8 +9,8 @@
 <body>
     <div id="app" class="app">
         <header class="hero">
-            <h1>音频处理控制台</h1>
-            <p>数字识别与声音克隆的综合平台</p>
+            <h1>DSP大作业</h1>
+            <p>自动化越杰2301 边丞阔 成秦川 徐淑琪 张豪杰</p>
         </header>
 
         <nav class="tabs">
@@ -53,22 +53,8 @@
                             <span>{{ selectedFile ? selectedFile.name : '📁 选择 WAV 文件' }}</span>
                             <input type="file" ref="fileInput" accept=".wav" @change="onFileChange">
                         </label>
-                        <span class="input-separator-text">或</span>
-                        <button 
-                            class="record-button"
-                            :class="{ recording: isRecognitionRecording, 'has-recording': hasRecognitionRecording }"
-                            @click="toggleRecognitionRecording"
-                            :disabled="isUploading"
-                            type="button"
-                        >
-                            <span class="record-icon">{{ isRecognitionRecording ? '⏹' : (hasRecognitionRecording ? '✓ 🎤' : '🎤') }}</span>
-                            <span class="record-text">{{ isRecognitionRecording ? '停止录音' : (hasRecognitionRecording ? '已录制' : '麦克风录音') }}</span>
-                        </button>
                     </div>
-                    <div v-if="recognitionRecordingError" class="recording-error">
-                        ⚠️ {{ recognitionRecordingError }}
-                    </div>
-                    <button class="primary-button upload-submit-btn" @click="handleUpload" :disabled="isUploading || (!selectedFile && !recognitionRecordedBlob)" type="button">
+                    <button class="primary-button upload-submit-btn" @click="handleUpload" :disabled="isUploading || !selectedFile" type="button">
                         {{ isUploading ? '处理中…' : '上传并预处理' }}
                     </button>
                 </div>
@@ -387,7 +373,27 @@
                                 <strong>{{ msg.role === 'user' ? '👤 您' : '🤖 AI' }}</strong>
                                 <span class="message-time">{{ msg.time }}</span>
                             </div>
-                            <div class="message-content">{{ msg.content }}</div>
+                            <div class="message-content">
+                                <!-- AI消息：如果有think标签，显示为可折叠 -->
+                                <template v-if="msg.role === 'assistant' && hasThinkTag(msg.content)">
+                                    <div class="message-main-content">{{ extractMainContent(msg.content) }}</div>
+                                    <button 
+                                        class="think-toggle" 
+                                        @click="msg.showThink = !msg.showThink"
+                                        type="button"
+                                    >
+                                        {{ msg.showThink ? '收起思考过程 ▲' : '查看思考过程 ▼' }}
+                                    </button>
+                                    <div v-show="msg.showThink" class="think-content">
+                                        <div class="think-header">💭 AI的思考过程：</div>
+                                        <div class="think-text">{{ extractThinkContent(msg.content) }}</div>
+                                    </div>
+                                </template>
+                                <!-- 普通消息：直接显示 -->
+                                <template v-else>
+                                    {{ msg.content }}
+                                </template>
+                            </div>
                             <audio 
                                 v-if="msg.audioPath" 
                                 controls 
@@ -497,7 +503,7 @@
 
             <section class="card lock-verify-card">
                 <h2>🎤 语音验证</h2>
-                <p class="hint">录制或上传语音进行身份验证和密码识别</p>
+                <p class="hint">上传语音进行身份验证和密码识别</p>
                 
                 <div class="lock-input-area">
                     <div class="lock-input-methods">
@@ -507,29 +513,15 @@
                                 <input type="file" ref="lockAudioInput" accept=".wav" @change="onLockAudioChange">
                             </label>
                         </div>
-                        <div class="input-separator-text">或</div>
-                        <div class="input-method-block">
-                            <button 
-                                class="record-button"
-                                :class="{ recording: isLockRecording, 'has-recording': hasLockRecording }"
-                                @click="toggleLockRecording"
-                                :disabled="isVerifying"
-                            >
-                                <span class="record-icon">{{ isLockRecording ? '⏹' : (hasLockRecording ? '✓ 🎤' : '🎤') }}</span>
-                                <span class="record-text">{{ isLockRecording ? '停止录音' : (hasLockRecording ? '已录制' : '麦克风录音') }}</span>
-                            </button>
-                        </div>
                     </div>
-                    <div v-if="lockRecordingError" class="recording-error">
-                        ⚠️ {{ lockRecordingError }}
-                    </div>
-                    <button 
-                        class="primary-button verify-button" 
-                        @click="verifyLock" 
-                        :disabled="isVerifying || !lockOwner || !lockPasscode || (!lockAudioFile && !lockRecordedBlob)"
-                    >
-                        {{ isVerifying ? '验证中…' : '🔓 验证开锁' }}
-                    </button>
+                    
+                        <button 
+                            class="primary-button verify-button" 
+                            @click="verifyLock" 
+                            :disabled="isVerifying || !lockOwner || !lockPasscode || !lockAudioFile"
+                        >
+                            {{ isVerifying ? '验证中…' : '🔓 验证开锁' }}
+                        </button>
                 </div>
 
                 <div v-if="lockResult" class="lock-result-display" :class="{ success: lockResult.unlock, failed: !lockResult.unlock }">
