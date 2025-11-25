@@ -32,6 +32,16 @@ app.use(express.json());
 // 静态文件服务器
 app.use(express.static(path.join(__dirname)));
 
+// 特殊路由：服务根目录下的 page.png
+app.get('/page.png', (req, res) => {
+    const imagePath = path.join(__dirname, '..', 'page.png');
+    if (fs.existsSync(imagePath)) {
+        res.sendFile(imagePath);
+    } else {
+        res.status(404).send('Image not found');
+    }
+});
+
 // 处理上传的 WAV 文件
 app.post('/process', upload.single('wavFile'), async (req, res) => {
     if (!req.file) {

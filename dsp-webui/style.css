@@ -1395,21 +1395,31 @@ body {
     justify-content: space-between;
 }
 
-@media (max-width: 640px) {
-    .lock-input-methods {
-        gap: 8px;
-    }
-    
-    .input-method-block {
-        width: 100%;
-    }
-    
-    .result-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .result-icon {
-        font-size: 2rem;
-    }
+/* Future Tab Styles */
+.future-grid {
+    grid-template-columns: 1fr;
+}
+
+.future-card {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+    text-align: center;
+}
+
+.future-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.future-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+    display: block;
 }

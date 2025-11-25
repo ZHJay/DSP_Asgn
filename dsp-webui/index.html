@@ -23,6 +23,13 @@
             </button>
             <button 
                 class="tab-button" 
+                :class="{ active: activeTab === 'lock' }"
+                @click="activeTab = 'lock'"
+            >
+                智能门锁
+            </button>
+            <button 
+                class="tab-button" 
                 :class="{ active: activeTab === 'clone' }"
                 @click="activeTab = 'clone'"
             >
@@ -37,10 +44,10 @@
             </button>
             <button 
                 class="tab-button" 
-                :class="{ active: activeTab === 'lock' }"
-                @click="activeTab = 'lock'"
+                :class="{ active: activeTab === 'future' }"
+                @click="activeTab = 'future'"
             >
-                智能门锁
+                未来展望
             </button>
         </nav>
 
@@ -472,7 +479,7 @@
                             v-model="lockPasscode" 
                             type="text" 
                             class="text-input"
-                            placeholder="例如: 3503"
+                            placeholder="例如: 1234"
                             pattern="[0-9]*"
                             maxlength="10"
                         />
@@ -604,6 +611,15 @@
                             <span class="message-text">{{ message }}</span>
                         </li>
                     </ul>
+                </div>
+            </section>
+        </main>
+
+        <main class="main-grid future-grid" v-show="activeTab === 'future'">
+            <section class="card future-card">
+                <h2>未来展望</h2>
+                <div class="future-content">
+                    <img src="page.png" alt="未来展望" class="future-image">
                 </div>
             </section>
         </main>
